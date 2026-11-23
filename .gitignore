@@ -66,3 +66,49 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Local dependencies and language caches
+node_modules/
+dist/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+playwright-report/
+test-results/
+
+# Local secrets (safe examples remain versioned)
+.env
+.env.*
+*.env
+!*.env.example
+!.env.example
+secrets/
+*.key
+*.pem
+*.pfx
+
+# Generated research artifacts; reviewed fixtures belong in resources/fixtures
+/models/
+/research-data/
+/reports/
+
+# Terraform state and local configuration; provider locks remain versioned
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Editor and OS state
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

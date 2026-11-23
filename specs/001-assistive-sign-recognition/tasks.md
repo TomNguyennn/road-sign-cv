@@ -15,14 +15,14 @@ description: "Dependency-ordered implementation tasks for the accessible sign re
 behavioral/contract tests before their implementation, demonstrate the expected failure, then make
 them pass. Add edge-case unit tests alongside each behavioral implementation task; test fixtures
 must not become production fallback implementations. Checked tasks mean completed with evidence,
-not merely drafted code. All tasks below are intentionally unchecked.
+not merely drafted code. Task checkboxes below record verified completion.
 
 **Organization**: Setup, common foundations, one phase per user story in specification order,
 then Azure delivery and cross-cutting validation. This regeneration preserves T001–T100 so existing
 plan references remain valid; it does not execute application or infrastructure implementation. The user has requested frequent rollback commits: commit coherent changes after their
 relevant checks pass, stage explicit paths, and leave the constitution uncommitted.
 
-**Task totals**: 100 unchecked tasks: setup 8, foundations 12, US1 24, US2 14, US3 12,
+**Task totals**: 100 tasks: setup 8, foundations 12, US1 24, US2 14, US3 12,
 US4 12, Azure delivery 12, final validation 6. Eighteen tasks form seven disjoint parallel waves.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -47,7 +47,7 @@ the linked design documents; do not change them silently during implementation.
 
 **Purpose**: Establish reproducible toolchains and test entry points without implementing features.
 
-- [ ] T001 Create scoped artifact exclusions in `.gitignore` and `.dockerignore` for `.venv/`, build outputs, secrets, `models/`, `research-data/`, and `reports/`; retain authorised small fixtures and manifests deliberately, without hiding source files or modifying the constitution.
+- [X] T001 Create scoped artifact exclusions in `.gitignore` and `.dockerignore` for `.venv/`, build outputs, secrets, `models/`, `research-data/`, and `reports/`; retain authorised small fixtures and manifests deliberately, without hiding source files or modifying the constitution.
 - [ ] T002 Establish C++20/GCC13, CMake/Ninja, pinned native dependency fetching and source checksums in `CMakeLists.txt`, `CMakePresets.json`, and `cmake/Dependencies.cmake`; include OpenCV/FFmpeg, ORT CPU, Drogon, Eigen, ByteTrack tracker sources, Tesseract, eSpeak NG and GoogleTest; define separate dev, ASan+UBSan and TSan presets.
 - [ ] T003 [P] Initialise the strict TypeScript/React/Vite frontend and locked Node22 dependencies in `frontend/package.json`, `frontend/package-lock.json`, `frontend/tsconfig.json`, and `frontend/vite.config.ts`; provide lint, typecheck, test, build and test:e2e commands without a deployed Vite server.
 - [ ] T004 [P] Initialise the typed Python3.12 training/evaluation package and immutable dependency lock in `training/pyproject.toml`, `training/requirements.lock`, and `training/road_sign_training/__init__.py`; include PyTorch/Ultralytics, ONNX tooling, pytest and metric dependencies without adding Python to the runtime backend.
