@@ -84,8 +84,13 @@ after the infrastructure, workflows and real custom model have been implemented 
    changes. Apply only that unexpired saved plan through protected infra-apply. On first setup,
    create the stack with the gateway disabled, issue/import the Key Vault certificate, then review
    and apply gateway enablement as documented in azure-deployment.md; do not reuse the local CA.
-5. Publish tested images/model artifacts to ACR by immutable digest. Dispatch protected deployment
-   with the validated release manifest. The VM pulls with managed identity and runs Compose with
+5. Follow [model-promotion.md](contracts/model-promotion.md): package the verified local bundle and
+   authorised parity fixtures/framework references, upload to the provisioned ACR through interactive
+   Entra authentication, then review/commit config/model-selection.json with the candidate digest and
+   package-manifest hash. A fresh trusted main checkout must retrieve that exact candidate, reject
+   malformed/changed files and pass parity/real-model gates before publishing. PR/fork CI stays
+   credential-free. Dispatch protected deployment with the published release-artifact digest, not
+   a mutable tag or local path. The VM pulls with managed identity and runs Compose with
    `--no-build`; health and synthetic recognition checks gate reopening admission.
 6. Validate maximum/oversized uploads and retry after failure, 5-FPS frames, ten-minute SSE,
    cancellation/recovery, phone camera/audio TLS, blocked direct-origin access, safe WAF/bot/rate
@@ -93,6 +98,11 @@ after the infrastructure, workflows and real custom model have been implemented 
 7. Exercise certificate renewal, host reboot without swap, state locking/recovery and a deliberately
    failed release followed by rollback. Record Azure end-to-end latency separately from native
    inference results in `reports/validation/azure.md`.
+8. Validate [telemetry.md](contracts/telemetry.md): enable the Azure aggregate exporter and verify
+   known C++ frame/queue/histogram samples reach RoadSignRuntime_CL and its Workbook through AMA/DCR.
+   Test duplicate samples, process resets, missing samples/alerts and text/secret canaries. Stall the
+   writer/collector and fill its bounded directory; recognition must keep working with visible
+   telemetry loss. Verify 16-MiB application log rotation separately from the 4,000-MB agent cache.
 
 Deploy/rollback interrupts the active session and requires a fresh user start. It must not replay
 history or attempt to restore media. Preserve the previous successful image/model manifest until

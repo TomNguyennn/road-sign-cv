@@ -21,7 +21,7 @@ Update that list for phone networks before testing; do not add a public bypass t
 | Azure DDoS IP Protection | Explicitly protect the gateway public IP; do not rely only on baseline platform mitigation |
 | NAT Gateway and outbound public IP | Explicit egress for the private VM to pull images, obtain certificates and install updates |
 | Azure VM and managed OS disk | Ubuntu 24.04, Standard_D4s_v5 (4 vCPU, 16 GiB), Docker Engine/Compose; no public VM IP |
-| Azure Container Registry Basic | Private backend/web images and versioned model OCI artifacts; admin login disabled; classic registry RBAC mode |
+| Azure Container Registry Basic | Private backend/web images, candidate/deployment model artifacts and release manifests/evidence; admin login disabled; classic registry RBAC mode |
 | Azure Key Vault Standard | TLS certificate and any required deployment secrets; RBAC, soft delete and purge protection |
 | Microsoft Entra workload identities and Azure managed identities | GitHub OIDC federation, gateway certificate access, VM image/artifact pull and certificate retrieval |
 | Azure Storage account and private Blob containers | Terraform state and short-lived saved plans in separate containers; Entra authentication, locking/recovery and scoped access; no demo media |
@@ -136,6 +136,14 @@ not a spending cap. WAF gateway, DDoS protection and NAT have costs while the ap
 deallocation alone does not stop those charges. Record an estimate and teardown owner before apply.
 [Budget behavior](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets).
 
+Application metrics follow [contracts/telemetry.md](contracts/telemetry.md): native fixed aggregates
+are written every 60 seconds to bounded host JSONL files and collected by AMA into RoadSignRuntime_CL
+through a typed DCR. Caddy/WAF/VM metrics cannot supply native frame/queue counters. Provision that
+custom table, collector, duplicate-safe Workbook queries and missing-telemetry alert explicitly.
+The Azure profile adds a dedicated 16-MiB aggregate-log mount; no request/media path is collected.
+The agent has a separate 4,000-MB disk-cache quota and resource accounting. Inference latency is
+labelled separately from browser end-to-end evaluation; missing samples never imply zero activity.
+
 ## Terraform ownership and state
 
 Planned files (created during implementation):
@@ -195,11 +203,11 @@ format rather than assuming a legacy name-only subject.
 
 | Workflow | Trigger and gates | Outputs and privilege boundary |
 |----------|-------------------|--------------------------------|
-| ci.yml | PR and main push: native unit/contracts, ASan/UBSan, separate TSan, Python tests/types, strict TS/lint/Vitest, Playwright/axe, both Docker build targets and Compose smoke; Terraform fmt/validate and plan-policy fixtures | Test summaries and synthetic-fixture reports; no cloud credentials; absent required code/model checks are reported as pending, never silently green |
+| ci.yml | PR and main push: native unit/contracts, ASan/UBSan, separate TSan, Python tests/types, strict TS/lint/Vitest, Playwright/axe, both Docker build targets and deterministic Compose smoke; Terraform fmt/validate and plan-policy fixtures | Test summaries and synthetic-fixture reports; no cloud credentials or private model download; trusted real-model validation remains a separate required publish gate |
 | terraform-plan.yml | Main push/manual trusted ref and weekly read-only drift: authenticated refresh/plan after static CI; PRs receive offline validation only | Reviewable plan summary and encrypted saved plan in restricted Azure Blob storage; exact commit, provider lock hash, backend key, checksum and expiry recorded; no apply permission |
-| publish.yml | Main push after CI succeeds for the same SHA; verify custom bundle/parity/license evidence before publishing a runnable release | Push backend/web images and model artifact to ACR, capture immutable digests, dependency/SBOM and scan results; no infra/deploy permission |
-| deploy.yml | Manual dispatch, main-only reviewed refs: separate protected infra-apply mode with plan ID and app-deploy mode with release ID | Apply the unexpired saved plan for the exact reviewed SHA; application deploy uses digests, OIDC and VM Run Command, tests readiness/recognition/SSE and records result; serialize per environment |
-| deploy.yml rollback mode | Explicit previous successful release ID under the same protected environment | Verify retained image/model digests and compatibility, stop current session, restore Compose release and verify health; never overwrite Terraform state |
+| publish.yml | Main push after same-SHA CI or protected rerun of an already-tested main SHA; read reviewed model-selection.json and pull its exact candidate digest, then verify inventory/hashes and rerun numerical parity/real-model tests | Push backend/web images, deployment model and release-manifest/evidence OCI artifacts to ACR; emit release-artifact digest; no infra/deploy permission |
+| deploy.yml | Manual dispatch, main-only reviewed refs: separate protected infra-apply mode with plan ID and app-deploy mode with release-artifact digest | Apply the unexpired saved plan for the exact reviewed SHA; fetch manifest by digest, use OIDC and VM managed identity, test readiness/recognition/SSE and record result; serialize per environment |
+| deploy.yml rollback mode | Explicit previous successful release-artifact digest under the same protected environment | Verify retained manifest/image/model digests and compatibility, stop current session, restore Compose release and verify health; never overwrite Terraform state |
 
 Configure GitHub Environment required reviewers and branch restrictions before enabling deploy;
 verify the repository/account supports them. If unavailable, leave deployment disabled until an
@@ -211,12 +219,17 @@ Use GitHub deployment concurrency with cancellation disabled for an in-progress 
 
 The non-secret release manifest contains `releaseId`, `gitSha`, `backendImageDigest`,
 `webImageDigest`, `modelArtifactDigest`, `modelManifestSha256`, `policySha256`,
-`composeSha256`, `terraformCommit`, and evidence references. Validate required fields, digest
+`composeSha256`, `terraformCommit`, `candidateDigest`, `packageManifestSha256`, and evidence references. Validate required fields, digest
 syntax, matching model/policy contract and tested commit before deployment. Keep the active and
 previous successful manifests; protect their referenced ACR artifacts from retention deletion.
 Model artifacts contain only authorised weights/catalogue/manifests, never ordinary session media.
 The VM pulls using managed identity, checks hashes, stages the release, then runs Compose with
 `--no-build`; the pipeline does not compile on the production VM.
+The manifest is itself published in `releases/app` and selected by its OCI digest; releaseId is
+only a display label. The reviewed candidate selection, first operator upload, file validation,
+parity evidence and publication sequence are normative in
+[contracts/model-promotion.md](contracts/model-promotion.md). Classic AcrPush/AcrPull are
+registry-scoped permissions; candidate/release repository names do not provide isolation.
 
 Deployment is a controlled maintenance interruption: stop admission, terminate the current session
 and audio, switch release, then reopen only after health/synthetic smoke passes. On failure restore
@@ -241,12 +254,18 @@ and private compute. Import/issue the certificate outside Terraform, then review
 with `is_gateway_enabled=true` and its validated certificate URI. The closed gateway flag is only
 for initial provisioning; acceptance requires it enabled with every protection. This allows first
 infrastructure creation before any release manifest exists. Publish the first verified release
-only after ACR is available, then use app-deploy. Preserve bootstrap state during environment teardown.
+only after ACR is available: the trainer uploads the authorised candidate using interactive Entra
+authentication, commits its digest/hash selection for review, and the trusted publish job retrieves
+it from a fresh checkout. Then use app-deploy with the emitted release-artifact digest. Preserve
+bootstrap state during environment teardown. No local-only weights or mutable model tag may be
+assumed by GitHub Actions.
 
 Record evidence for AZ-001–AZ-008: valid/max/oversized uploads and retry after failure, 5-FPS frames,
 ten-minute SSE, cookie/CSRF rejection, blocked first speech recovery, cancellation receipts, phone
 HTTPS, tester boundary/origin isolation, safe WAF/bot/rate checks, log-canary absence, certificate
 rotation, host reboot without swap, alert delivery, state lock/recovery and failed-deploy rollback.
+Include fresh-checkout model retrieval, unsafe/mismatched candidate rejection, fixture exclusion
+from deployment artifacts and actual runtime-metric ingestion/deduplication/gap/rotation tests.
 Measure end-to-end latency through Azure separately from the native inference benchmark. Do not
 simulate volumetric DDoS traffic as an ordinary acceptance test.
 

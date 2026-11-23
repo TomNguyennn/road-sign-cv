@@ -1,8 +1,11 @@
 # Data Model and State Ownership
 
-All runtime entities are session-local and non-persistent. JSON wire fields use camelCase;
+All recognition runtime entities are session-local and non-persistent. JSON wire fields use camelCase;
 C++ type names use PascalCase. Offline DatasetManifest/ModelManifest/EvaluationRun are separate
 research artifacts and never populated from ordinary demo sessions.
+Process-wide aggregate metrics are separately defined in [telemetry.md](contracts/telemetry.md),
+with no session identifiers/content. Offline model candidates and release manifests follow
+[model-promotion.md](contracts/model-promotion.md); neither stores ordinary demo media.
 
 ## Entities
 

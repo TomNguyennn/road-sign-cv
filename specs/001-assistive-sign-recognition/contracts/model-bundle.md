@@ -86,3 +86,9 @@ claims of detector accuracy.
 
 Training, export, and benchmark artifacts must retain dependency/model provenance. No ordinary demo
 upload can be used by these commands unless separately collected and authorised as research data.
+
+For Azure delivery, follow [model-promotion.md](model-promotion.md): package authorised parity
+fixtures and saved trained-framework reference tensors with the local evidence, upload through
+interactive identity to ACR, and select the immutable candidate through reviewed configuration.
+The trusted publisher reruns export/native checks against those references before producing the
+deployment-only bundle. The runtime bundle contract above is unchanged; fixtures are not deployed.

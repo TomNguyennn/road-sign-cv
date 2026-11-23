@@ -41,6 +41,9 @@ evaluation outputs are written only by an offline evaluation command. No ordinar
 recognised text, audio, or history is persisted.
 Azure Blob stores protected Terraform state/plans; ACR stores images and authorised model artifacts.
 Sanitized operational telemetry goes to Log Analytics. These stores must never receive session media.
+Azure runtime metrics use one fixed-schema JSONL sample/minute, bounded to 16 MiB of host files,
+collected by AMA/DCR into RoadSignRuntime_CL. The agent's separate disk-cache quota is 4,000 MB.
+Only the aggregate-log mount is persistent/writable; media/request spools stay on bounded tmpfs.
 
 **Testing**: GoogleTest/CTest for domain, native integration and contracts; ASan/UBSan and a separate
 TSan build; pytest for dataset/export checks; Vitest for client state; Playwright/axe for workflows;
@@ -104,6 +107,8 @@ specs/001-assistive-sign-recognition/
   checklists/requirements.md
   contracts/api.md
   contracts/model-bundle.md
+  contracts/model-promotion.md
+  contracts/telemetry.md
   contracts/ui.md
 ```
 
@@ -188,6 +193,14 @@ profile retains the internal-CA workflow.
 - Source replacement ends the old session. Seeking retains the uploaded file but creates a new
   epoch, resets tracking and audio, and discards all old-epoch results. Completing an input leaves
   results reviewable until explicit end/disconnect.
+- Lost upload responses are reconciled through an atomic upload-status snapshot correlated with
+  the transfer UUID. Terminal upload events are independent of lifecycle changes; unknown outcomes
+  require explicit end/start rather than speculative resubmission.
+- Manual repeat/recovery has null live-source fields in audio.ready and cannot affect overlays,
+  automatic signature suppression or capture latency metrics. It retains text, not historical frames.
+- Trusted publication retrieves the reviewed ACR candidate digest, validates its inventory/evidence
+  and reruns parity. No GitHub job depends on a developer's ignored local model directory. Runtime
+  operational metrics have a native emitter and explicit ingestion contract, not only dashboards.
 
 ## Implementation Sequence and Validation Gates
 
@@ -211,8 +224,9 @@ keep tests alongside every behavioral change and include model/data preparation 
 
 ## Complexity Tracking
 
-No constitution violations. Native library adapters and two worker queues satisfy C++ ownership,
-responsive controls and blocking third-party APIs. Azure adds the explicitly requested security
+No constitution violations. Native library adapters and bounded vision/speech workers satisfy C++
+ownership, responsive controls and blocking third-party APIs. A separate one-slot aggregate-metrics
+writer keeps telemetry I/O off those paths. Azure adds the explicitly requested security
 and operations infrastructure while preserving a single application deployment unit. No cluster,
 message broker, database or distributed domain service is introduced.
 
@@ -232,6 +246,18 @@ message broker, database or distributed domain service is introduced.
 - I4: T005 dependency provenance waits for both frontend and Python locks; it is not parallel to them.
 - U3: video overlays require local decoding/synchronisation; otherwise text/audio review is the
   defined fallback. No preview-image transport is added.
+- I5: upload.state plus GET upload-status expose the current/latest attempt and atomic counters;
+  lost responses, unchanged lifecycle state and late events have explicit reconciliation rules.
+- I6: audio.ready uses origin-discriminated source fields; repeat/recovery sets source IDs to null,
+  has a bounded fresh offer lifetime and is excluded from live-frame associations and timing.
+- U4: model-promotion.md defines operator-authenticated initial upload, reviewed candidate selection,
+  trusted parity validation and digest-selected release manifests, including the first release.
+- C1: telemetry.md defines the C++ aggregate schema/cadence/bounds and AMA/DCR/table/query path,
+  including duplicate/gap handling and live ingestion evidence.
+
+FR-010 and US4 scenario 6 explicitly accept the local-video overlay fallback; text/audio recognition
+must continue across the documented browser matrix. Post-remediation constitution review remains
+PASS: no language/boundary exceptions, retained session media, runtime Python or new domain service.
 
 Commit coherent validated design/implementation increments to provide rollback points, as requested.
 Use explicit paths for staging and leave .specify/memory/constitution.md uncommitted.

@@ -117,7 +117,7 @@ an evaluation report from a fixed labelled evaluation set and recorded test cond
 
 **Acceptance Scenarios**:
 
-1. **Given** visual results are enabled, **When** a sign is detected, **Then** its box, category, and
+1. **Given** visual results are enabled and a matching local frame is available, **When** a sign is detected, **Then** its box, category, and
    available text refer to the same observation; hiding results does not disable recognition.
 2. **Given** announcements occur, **When** the user reviews session history, **Then** chronological
    descriptions are accessible and intentional repeats are distinguishable from automatic speech.

@@ -239,3 +239,26 @@ Null source fields also prevent manual replay from corrupting live overlays or l
 **Alternatives considered**: Automatic retries or treating timeouts as failure can duplicate uncertain
 work. Retaining every upload receipt or historical frame adds unnecessary state. Requiring overlays
 on browsers without compatible local decoding would contradict the agreed text/audio prototype.
+
+## Model promotion and operational metrics corrections
+
+**Decision**: Use existing ACR for candidate packages, deployment bundles and release manifests.
+An authorised trainer uploads using interactive Entra authentication; reviewed model-selection.json
+pins the candidate digest and package-manifest hash. Trusted GitHub publication retrieves it from
+a fresh checkout and validates parity against saved framework references before creating a separate
+deployment bundle. Define native aggregate metrics as bounded JSONL collected by the existing
+VM agent through a typed DCR into RoadSignRuntime_CL. Exact schemas, roles, source references and
+acceptance cases are in [model-promotion.md](contracts/model-promotion.md) and
+[telemetry.md](contracts/telemetry.md).
+
+**Rationale**: Local ignored weights are not a reproducible CI input. Digest selection plus reviewed
+hashes creates a concrete first-release handoff without a new service or static credentials.
+Saved numerical framework references avoid loading training pickle/checkpoint code in publication.
+Only native counters can supply processed-frame and queue data; gateway/VM dashboards cannot infer
+them. Bounded aggregate output provides those metrics without session retention or inference blocking.
+
+**Alternatives considered**: GitHub caches/local runner directories lack an explicit durable model
+selection contract; mutable tags weaken repeatability; shipping parity media to the runtime is
+unnecessary. A public metrics endpoint, C++ cloud SDK or additional tracing platform is not needed
+for the requested dashboards. Classic ACR roles remain registry-wide; repository names are not ACLs.
+Agent storage is separately bounded and measured rather than hidden inside the application log cap.
