@@ -221,3 +221,21 @@ Terraform choice. Static Azure credentials and mutable image tags weaken deliver
 Detailed decisions, current primary-source references, service inventory, editable policies,
 release fields and test gates are in [azure-deployment.md](azure-deployment.md). Optional Azure
 services are distinguished from the required baseline; no cloud resources were created.
+
+## Upload reconciliation and historical audio corrections
+
+**Decision**: Correlate each explicitly submitted upload with a client UUID, expose an atomic
+UploadStatusSnapshot through a read endpoint and dedicated events, and publish terminal failure
+only after cleanup. Unknown admission outcomes require explicit session replacement. Manual
+repeat/recovery uses null live-source fields, retaining text without frame/track lifetime coupling.
+FR-010 and US4 scenario 6 now expressly allow text/audio fallback when local video overlays cannot
+be decoded or synchronized; their accessible explanation and continued recognition are test gates.
+
+**Rationale**: A failed transfer can leave lifecycle state unchanged, so session.state cannot prove
+its outcome. Bounded latest-receipt storage resolves observable transfers without an unbounded
+idempotency ledger. Historical speech need not fabricate observation IDs or keep old pixels alive.
+Null source fields also prevent manual replay from corrupting live overlays or latency measures.
+
+**Alternatives considered**: Automatic retries or treating timeouts as failure can duplicate uncertain
+work. Retaining every upload receipt or historical frame adds unnecessary state. Requiring overlays
+on browsers without compatible local decoding would contradict the agreed text/audio prototype.

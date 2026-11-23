@@ -193,6 +193,20 @@ consent and ratings. Recruitment or data gaps remain incomplete outcomes, not in
   explanation; do not request a nonexistent server thumbnail endpoint.
 - Image-only acceptance may run before tracking; full US1 camera acceptance must wait for US2's
   tracking/temporal-consensus integration. Capture dependency hashes after package locks resolve.
+- Drop a successful upload response with SSE still connected: matching upload.state or GET
+  upload-status must show accepted, with no body resend. Drop a validation/abort response while
+  lifecycle stays awaitingInput: wait for the terminal receipt after cleanup, then allow a fresh
+  explicit attempt. Deliver old snapshots late; counters/state must not regress. For an unmatched
+  or idle receipt after an uncertain request, offer end/start rather than guessing failure; bound
+  polling to 1 Hz/65 seconds and reject a delayed old request after session replacement.
+- Expire/remove the source track and truncate ordinary history, then repeat the last-started text
+  or recover the latest accepted description. Require a new manual WAV with null source IDs,
+  omitted capture time, no overlay movement and no capture-latency sample. Its offer still expires
+  after five seconds if not started; a historical description is not an indefinitely valid WAV.
+- Run spec.md US4 scenario 6 across applicable supported browsers with local video decode or
+  synchronization disabled: preserve backend recognition, text review and spoken feedback, show an
+  accessible overlay limitation and make no server-preview request. This is supported fallback,
+  not a claim that an unavailable overlay was rendered successfully.
 
 ## Shutdown
 

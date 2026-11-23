@@ -17,6 +17,10 @@ logical focus order, and visible focus. Disabled controls have an adjacent expla
 reason is not obvious. File constraints and effective upload-attempt limit are available before choosing a file. A failed
 admitted upload shows attempts used/remaining and permits another attempt; exhausted budgets offer
 end/start recovery. Zero configured maximum is labelled unlimited, not zero permitted attempts.
+After an uncertain upload response, keep another upload disabled while matching uploadAttemptId
+against upload.state or GET upload-status. Accepted means continue without resubmission; a cleaned-up
+rejection/abort with remaining budget permits an explicit new transfer. Unknown IDs require explicit
+end/start recovery. Polling and status announcements must follow api.md's bounds; Stop stays available.
 
 Start requests camera permission only for camera mode and activates AudioContext from the user
 interaction. Failure of either step must not leave invisible capture running. Default camera
@@ -30,6 +34,8 @@ activates audio and requests recovery of the current descriptionId, including an
 announcement never started. Show it independently of Repeat latest, which plays only the latest
 started description when unmuted. Both respect mute; no accepted result means recovery is unavailable. Stop, mute, and disconnect take
 local effect immediately, irrespective of HTTP completion.
+Repeat/recovery events intentionally have null source IDs. They remain reviewable and playable
+after track removal, but must not move an overlay or be counted as a new capture-to-speech sample.
 
 ## Status versus recognition content
 
@@ -57,6 +63,9 @@ Manual release checks cover NVDA with desktop Chrome/Firefox, VoiceOver with mac
 actual iPhone Safari, and TalkBack with Android Chrome. Record exact OS/browser/assistive versions.
 Check trusted HTTPS, grant/deny/revoke permission, activation rejection, all controls without
 visual results, seek while audio is pending, loss of connection and competing session rejection.
+Exercise the supported text/audio fallback in spec.md US4 scenario 6 by disabling local video
+decoding or timestamp synchronization in each applicable browser: explain the missing overlay,
+continue recognition/review/audio and never request server preview frames or display stale boxes.
 
 The five-participant study uses authorised staged scenes and records task completion plus 1–5
 clarity, relevance and timing ratings. Do not represent automated accessibility scans or developer

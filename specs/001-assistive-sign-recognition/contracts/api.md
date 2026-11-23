@@ -33,9 +33,10 @@ or automatically retrying uploads. WAF limits supplement, rather than replace, b
 | GET /capabilities | none | 200 supported input types/limits, catalogue, policyVersion; safe public configuration |
 | POST /sessions | `{sourceKind:"camera"\|"image"\|"video"}` | 201 `{sessionId,csrfToken,epoch:1,audioGeneration:1,stateRevision,eventsUrl,uploadAttemptsUsed:0,maxUploadAttempts}`; 409 BUSY if lease held |
 | GET /sessions/{id}/events | cookie; Accept text/event-stream | 200 SSE; exactly one attachment; attach within 10 s; duplicate attach 409 |
+| GET /sessions/{id}/upload-status | owning cookie | 200 UploadStatusSnapshot; atomic read, no-store; no lease extension or attempt allocation; image/video only |
 | POST /sessions/{id}/heartbeat | `{epoch}` | 204, extends lease 15 s; requires owning cookie/CSRF |
 | POST /sessions/{id}/frames | raw image/jpeg; headers `X-Epoch`, `X-Frame-Id`, `X-Source-Time-Ms`, `X-Capture-Time-Ms` | 202 `{frameId,epoch}`; camera only, max 1 MiB, <=1280x720 |
-| POST /sessions/{id}/media | multipart field `file`; header `X-Epoch` | 202 `{epoch,uploadAttemptsUsed,maxUploadAttempts}` after format/limits validated; image/video only; at most one successfully accepted upload per session; failed attempts may retry within the attempt budget |
+| POST /sessions/{id}/media | multipart field `file`; headers `X-Epoch`, `X-Upload-Attempt-Id` (client UUID) | 202 UploadStatusSnapshot with uploadStatus=accepted after format/limits validated; image/video only; one accepted upload per session; failed admitted attempts may retry within budget |
 | POST /sessions/{id}/seek | `{epoch,positionMs}` | 200 `{epoch:newEpoch,audioGeneration,stateRevision}`; video only; clears old tracks/results/audio; bounds 0<=positionMs<duration |
 | POST /sessions/{id}/audio | `{action:"mute"\|"unmute"\|"enable"\|"repeat"\|"recover",epoch,descriptionId?}` | 200 `{isMuted,isAudioBlocked,audioGeneration,stateRevision}`; repeat while muted/empty 409; recover requires the current descriptionId and an activated client audio context |
 | GET /sessions/{id}/audio/{announcementId} | cookie | 200 audio/wav with `X-Audio-Valid-For-Ms` residual validity; stale/released 410 |
@@ -69,6 +70,7 @@ Send standard SSE `event: <type>` and `data: <JSON>`, with no replayable `id` fi
 | session.ready | `{state:"awaitingInput",audioGeneration}` |
 | heartbeat | `{leaseRemainingMs}` every 5 s |
 | session.state | `{state,audioGeneration,isMuted,isAudioBlocked,sourceTimeMs?,durationMs?}` |
+| upload.state | UploadStatusSnapshot without epoch/stateRevision (already in envelope); emitted on admission, validation and every terminal upload transition |
 | frame.result | `{frameId,sourceTimeMs,clientCaptureTimeMs?,width,height,observations:[...]}` |
 | frame.dropped | `{frameId,reason:"superseded"}` |
 | audio.ready | `{announcementId,trackId,revision,audioGeneration,text,isReplay,origin,audioUrl,durationMs,validForMs,frameId,clientCaptureTimeMs?}` |
@@ -81,6 +83,12 @@ Each observation is `{trackId,category,confidence,box:{x,y,width,height},text:st
 isAccepted:boolean}`. Coordinates are upright original pixels; numbers are finite and bounded.
 Never emit raw unvalidated OCR text to speech. UI may label unaccepted visual detections as uncertain.
 JSON events <=64 KiB; max 100 observations; long text <=500 characters per accepted description.
+audio.ready is discriminated by origin. For automatic speech, isReplay=false and trackId, revision
+and frameId are non-null; clientCaptureTimeMs is optional capture metadata. For repeat/recovery,
+isReplay=true, trackId=null, revision=null, frameId=null and clientCaptureTimeMs MUST be omitted.
+Those nulls mean deliberate historical speech without a live observation association, not missing
+recognition data. Manual playback cannot move an overlay, mark a track/revision automatically spoken
+or enter capture-to-speech latency metrics. All origins retain session/epoch/generation ownership.
 Output overflow coalesces frame.result events to the latest frame; control/cancel/end events have
 priority. If bounded output cannot drain, end the session instead of retaining unbounded data.
 
@@ -105,8 +113,8 @@ change cancels pending fetches and decoded buffers as well as playback.
 
 ## Control reconciliation, expiry and upload admission
 
-Session creation, seek and audio-control responses include stateRevision. Every accepted lifecycle
-or audio-state mutation advances this revision on the session executor. Emit session.state with
+Session creation, seek and audio-control responses include stateRevision. Every accepted lifecycle,
+audio-state or upload-receipt mutation advances this revision on the session executor. Emit session.state with
 new epoch/generation before any new-epoch result. The client accepts an authoritative session.state
 from its current session even if its HTTP control reply has not arrived, reconciles by increasing
 stateRevision, and ignores older control replies. Other events cannot advance epoch themselves.
@@ -165,7 +173,47 @@ ending it and creating a new session. At the finite attempt limit return 409 UPL
 before reading a new body. Explain that the user can end/start a session and try again; retain no
 failed file. A failed upload must never silently become a successful upload or block the next valid
 attempt solely because a previous request was sent. Do not automatically retry uploads on network
-uncertainty: reconcile the session.state event first to avoid duplicate acceptance.
+uncertainty: reconcile the matching upload attempt through upload.state or GET upload-status as
+defined below; session.state alone is not evidence of an upload outcome.
+
+### Authoritative upload reconciliation (I5)
+
+UploadStatusSnapshot is `{epoch,stateRevision,uploadAttemptId,uploadStatus,uploadAttemptsUsed,
+maxUploadAttempts,hasAcceptedUpload,canRetryUpload,errorCode}`. uploadAttemptId is UUID|null;
+uploadStatus is idle|receiving|validating|accepted|rejected|aborted; errorCode is a fixed safe
+application code|null. Initial status is idle, ID/errorCode null and counters zero. Keep only the
+current or latest admitted attempt, not an unbounded attempt ledger. The ID correlates a transfer;
+it is not a resumable-upload or automatic retry key.
+
+The client generates a fresh UUID for each explicit new transfer. Forward it through the private
+admission request and bind it to the internal nonce. On admission, atomically record that ID,
+increment uploadAttemptsUsed and stateRevision, enter receiving and emit upload.state. Enter
+validating after receiving the body. Commit accepted or finish rejected/aborted cleanup on the
+session executor, release admission, advance stateRevision and emit upload.state even when the
+lifecycle remains awaitingInput. Accepted is terminal for the session's source slot. A validation
+failure is terminal only after its partial files/handles and reservation have been released.
+Safe errorCode is non-null only for rejected/aborted; hasAcceptedUpload is true only after commit.
+Pre-admission rejection does not replace the latest receipt or increment counters; an owning
+client's backend error includes the current snapshot. Gateway errors may have no snapshot.
+
+canRetryUpload is true only when the session is awaitingInput, no transfer is in flight, no source
+was accepted and the budget permits admission. GET reads all fields atomically on that executor;
+the client ignores older stateRevision snapshots. A late HTTP response cannot overwrite a newer
+upload.state. Duplicate submission of the current/latest attempt ID returns 409 without admission.
+Clients never resend a transfer whose outcome is unknown.
+
+If the response is lost while SSE remains connected, disable another upload and read upload-status.
+A matching accepted receipt means success without resending the body; matching rejected/aborted
+plus canRetryUpload permits an explicit new attempt with a new UUID. Matching receiving/validating
+means wait. An idle or different-ID snapshot does not prove that the uncertain request cannot arrive
+later: do not retry in that session. Offer End session and start again, which invalidates the old
+cookie/session before any replacement upload. Reconciliation may poll at most once per second for
+65 seconds while normal heartbeats continue; then stop polling and offer explicit end/start recovery.
+Stop is always available. Event-stream failure still ends the session and requires a new start.
+Never infer upload failure, free capacity or success from elapsed time alone.
+
+Regress lost 202, lost validation/abort response, failure without lifecycle change, snapshot/event
+reordering, pre-admission rejection, unknown delayed admission and explicit end/start invalidation.
 
 ## Cancellation barriers (U1)
 
@@ -210,6 +258,10 @@ continues to mean the last description whose playback started (`origin:"repeat",
 Automatic items use `origin:"automatic", isReplay:false`. Recovery does not require a previous
 started announcement. If a cancellation barrier is outstanding, the explicit request waits for its
 acknowledgment before synthesis/offer; failure to clear the barrier ends the session as above.
+Retained descriptions may outlive their tracks; repeat/recovery audio.ready therefore uses the
+null source fields defined above. A newly offered manual artifact expires five seconds after offer
+if playback has not started; its completed-playback deadline remains declared duration+5 seconds.
+Historical description availability is not permission to keep an offered WAV indefinitely.
 
 ## Visual fallback boundary (U3)
 

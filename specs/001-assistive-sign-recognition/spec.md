@@ -128,6 +128,12 @@ an evaluation report from a fixed labelled evaluation set and recorded test cond
    evaluation membership are documented.
 5. **Given** the session ends, **When** another session starts, **Then** previous media, sign identities,
    recognised text, and announcement history are not available in the new session.
+6. **Given** an uploaded video is supported by the backend but the browser cannot decode it locally
+   or synchronize its displayed frame with detection timestamps, **When** visual results are requested,
+   **Then** the overlay is disabled with an accessible explanation while backend recognition,
+   text review and spoken feedback continue. The application does not draw stale boxes on another
+   frame or request a server-generated preview image. This fallback is supported across the
+   documented input/browser test matrix and does not count as failure of text/audio recognition.
 
 ### Edge Cases
 
@@ -148,6 +154,8 @@ an evaluation report from a fixed labelled evaluation set and recorded test cond
   do not expose or interrupt the first user's results.
 - Screen-reader feedback and application speech: avoid automatically reading the same recognition
   result through both channels; keep result text available for deliberate screen-reader review.
+- A supported uploaded video cannot be decoded or synchronized locally: disable its overlay,
+  explain the limitation accessibly, and retain backend recognition plus text/audio review.
 
 ## Requirements *(mandatory)*
 
@@ -183,6 +191,10 @@ an evaluation report from a fixed labelled evaluation set and recorded test cond
   announcements. Users MUST retain access to the recognised text.
 - **FR-010**: It MUST expose optional, associated sign boxes/category/text and a chronological
   session announcement history that distinguishes intentional replays from automatic speech.
+  Overlays MUST refer to matching locally available frames. For uploaded video without local
+  decoding or timestamp synchronization, the supported fallback MUST disable the overlay with an
+  accessible explanation while preserving recognition, text review and audio feedback. No server
+  preview-image transport is required; unmatched or stale overlays MUST NOT be shown.
 - **FR-011**: It MUST handle the listed input, connection, and playback failures with accessible
   status and recovery actions. Supported upload formats and limits MUST be visible before upload
   and consistently enforced; they are to be fixed in technical planning.
