@@ -158,6 +158,7 @@ They must be versioned and changed only using training/validation data, never th
 | Policy | Initial decision |
 |--------|------------------|
 | Camera | JPEG quality 0.8, aspect-preserving max 1280x720, <=5 Hz, max 1 MiB/frame |
+| Upload attempts | MAX_UPLOAD_ATTEMPTS default3; integer0–100, 0 unlimited; one accepted upload/session; rejected attempts retry within budget |
 | Images | JPEG/PNG only, <=10 MiB, <=20 million decoded pixels, upright orientation |
 | Video | MP4/H.264 or WebM/VP8/VP9, <=100 MiB, <=300 s, <=1920x1080, <=60 source FPS |
 | Detection | FP32 640 input; keep scores >=0.10 for tracking; class-aware NMS IoU 0.45 |
@@ -182,3 +183,18 @@ wall time for queue freshness, and client monotonic time for capture-to-playback
 Class 0–3 warnings/restrictions have priority 0; class 5 directions priority 1; classes 4/6 priority 2.
 Class 7 temporary pedestrian notices use priority 0 as a conservative category-level setting,
 without inferring prohibitions or route instructions from arbitrary text.
+
+## Review corrections: decisions and alternatives
+
+**Decision**: Explicit stateRevision responses, configurable admitted-upload attempts, separate
+cancellation receipts, latest-accepted-result recovery, split image/camera acceptance, lock-dependent
+provenance capture, and text/audio-only video fallback when local rendering is unavailable.
+
+**Rationale**: These resolve I1/I2/U1/U2/I3/I4/U3 without changing recognition scope or adding media
+retention. Cancellation acknowledgment is not a stale playback result. An image can be recovered
+without requiring any prior successful speech. MAX_UPLOAD_ATTEMPTS is a documented edit point,
+not a placeholder or a fixed successful-upload count.
+
+**Alternatives considered**: Reusing playback acknowledgments leaves ambiguous generation fencing;
+automatic replay restores stale queues; server-preview images add transport/storage obligations;
+moving all tracking into foundations unnecessarily blocks the initial image milestone.

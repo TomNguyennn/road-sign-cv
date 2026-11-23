@@ -18,7 +18,8 @@ not merely drafted code. All tasks below are intentionally unchecked.
 
 **Organization**: Setup, common foundations, one phase per user story in specification order,
 then cross-cutting validation. No application implementation is performed by this task-generation
-command. Do not commit changes, including the constitution, unless the user later requests it.
+command. The user has requested frequent rollback commits: commit coherent changes after their
+relevant checks pass, stage explicit paths, and leave the constitution uncommitted.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -46,13 +47,13 @@ the linked design documents; do not change them silently during implementation.
 - [ ] T002 Establish C++20/GCC13, CMake/Ninja, pinned native dependency fetching and source checksums in `CMakeLists.txt`, `CMakePresets.json`, and `cmake/Dependencies.cmake`; include OpenCV/FFmpeg, ORT CPU, Drogon, Eigen, ByteTrack tracker sources, Tesseract, eSpeak NG and GoogleTest; define separate dev, ASan+UBSan and TSan presets.
 - [ ] T003 [P] Initialise the strict TypeScript/React/Vite frontend and locked Node22 dependencies in `frontend/package.json`, `frontend/package-lock.json`, `frontend/tsconfig.json`, and `frontend/vite.config.ts`; provide lint, typecheck, test, build and test:e2e commands without a deployed Vite server.
 - [ ] T004 [P] Initialise the typed Python3.12 training/evaluation package and immutable dependency lock in `training/pyproject.toml`, `training/requirements.lock`, and `training/road_sign_training/__init__.py`; include PyTorch/Ultralytics, ONNX tooling, pytest and metric dependencies without adding Python to the runtime backend.
-- [ ] T005 [P] Record dependency versions/checksums and upstream code/model/data licence notices in `config/dependency-manifest.json` and `docs/dependency-provenance.md`; include the ByteTrack source commit, English OCR/voice data and Ultralytics/eSpeak terms without selecting a new repository licence.
+- [ ] T005 Record dependency versions/checksums and upstream code/model/data licence notices in `config/dependency-manifest.json` and `docs/dependency-provenance.md`; include the ByteTrack source commit, English OCR/voice data and Ultralytics/eSpeak terms without selecting a new repository licence. Wait for T003 and T004 to finish dependency resolution before collecting their hashes.
 - [ ] T006 Configure naming, formatting, lint and type checks in `.clang-format`, `.clang-tidy`, `frontend/eslint.config.js`, and `training/pyproject.toml`; preserve PascalCase C++/TS files/types, camelCase C++/TS values, snake_case Python and strict annotations without suppressions.
 - [ ] T007 Add native module targets with private include paths and acyclic public dependencies in `backend/CMakeLists.txt` and `backend/tests/ModuleBoundariesTest.cmake`; test that private-domain/infrastructure imports between modules fail instead of exposing all backend includes globally.
 - [ ] T008 Configure deterministic test entry points in `frontend/vitest.config.ts`, `frontend/playwright.config.ts`, `backend/tests/TestSupport.hpp`, and `training/tests/conftest.py`; provide controllable clocks/worker barriers and test-only observation/audio fixtures, and make the planned commands discoverable.
 
 **Checkpoint**: Dependency manifests, language checks and empty test runners work; no trained model
-or dataset is assumed present. T003–T005 form one parallel wave after T002.
+or dataset is assumed present. T003–T004 form one parallel wave after T002; T005 waits for both locks before recording hashes.
 
 ---
 
@@ -66,13 +67,13 @@ unfinished leaf modules, but production readiness remains false until the real b
 - [ ] T010 [P] Write ownership, resource-policy and error-redaction tests in `backend/tests/integration/RuntimeFoundationTest.cpp` for retained frame backing storage, bounded worker queues, finite geometry, no raw text/token logs and no persistent session spools.
 - [ ] T011 Define shared immutable contracts in `backend/shared/Frame.hpp`, `backend/shared/Geometry.hpp`, and `backend/shared/Identity.hpp`; preserve Frame constraints verbatim: "frameId uint64 monotonic per epoch, sourceTimeMs finite nonnegative, clientCaptureTimeMs optional, width/height, owned pixel bytes" and "One active + one latest pending"; reject invalid dimensions/arithmetic before allocation and provide copy/move lifetime tests.
 - [ ] T012 Define module public interfaces in `backend/modules/media-processing/public/MediaSource.hpp`, `backend/modules/sign-recognition/public/SignObservation.hpp`, `backend/modules/text-extraction/public/ExtractTextRequest.hpp`, `backend/modules/announcements/public/AcceptedInformation.hpp`, and `backend/modules/speech/public/AudioArtifact.hpp`; preserve "confidence [0,1]", "box finite xywh in upright original pixels, clipped before ROI access", "revision uint32", "formatting/case-only text changes do not advance revision", and audio "<=45 seconds; released at completion/cancellation/end"; keep library handles private.
-- [ ] T013 Implement the session entity and serialised lifecycle in `backend/modules/recognition-session/domain/RecognitionSession.hpp` and `backend/modules/recognition-session/application/SessionService.cpp`; preserve "sessionId UUID", "sourceKind camera/image/video", "epoch uint32 starting 1", "stateRevision monotonic uint64", "csrfToken random secret", "audioGeneration uint32", "isMuted bool", and "One global active lease"; implement created/awaitingInput/processing/reviewing/ending/ended and release the lease only after cleanup.
+- [ ] T013 Implement the session entity and serialised lifecycle in `backend/modules/recognition-session/domain/RecognitionSession.hpp` and `backend/modules/recognition-session/application/SessionService.cpp`; preserve "sessionId UUID", "sourceKind camera/image/video", "epoch uint32 starting 1", "stateRevision monotonic uint64", "csrfToken random secret", "audioGeneration uint32", "isMuted bool", and "One global active lease"; implement created/awaitingInput/processing/reviewing/ending/ended and release the lease only after cleanup. Include uploadAttemptsUsed=0, maxUploadAttempts=0–100 (0 unlimited), and hasAcceptedUpload=false; accepted files alone consume the source slot.
 - [ ] T014 Implement owned vision/speech worker handoff and cooperative cancellation in `backend/modules/recognition-session/infrastructure/SessionExecutor.cpp`; tag work by session/epoch/generation, discard stale completions before publication, cap vision work at one active plus one latest pending, and never detach workers referencing destroyed state.
-- [ ] T015 Implement JSON validation, fixed safe error codes, cookie/Origin/CSRF ownership, POST/DELETE sessions and GET health/ready/capabilities handlers in `backend/modules/recognition-session/infrastructure/SessionController.cpp`; follow every status/no-store rule in `contracts/api.md`, reject unknown fields, do not reveal another session and return unavailable until model verification exists.
+- [ ] T015 Implement JSON validation, fixed safe error codes, cookie/Origin/CSRF ownership, POST/DELETE sessions and GET health/ready/capabilities handlers in `backend/modules/recognition-session/infrastructure/SessionController.cpp`; follow every status/no-store rule in `contracts/api.md`, reject unknown fields, do not reveal another session and return unavailable until model verification exists. Return stateRevision explicitly in creation and ending responses and expose the effective attempt limit without private session metadata.
 - [ ] T016 Implement the ordered single-attachment SSE stream and heartbeat endpoint in `backend/modules/recognition-session/infrastructure/SessionEventsController.cpp`; emit session/epoch/stateRevision/eventSeq, 64-KiB maximum events, latest-result coalescing, priority cancel/end messages and no replay IDs; expire undrained streams/leases and test state-before-result ordering.
-- [ ] T017 Implement validated environment/policy loading and redacted logs in `backend/infrastructure/RuntimeConfig.cpp`, `backend/infrastructure/Logger.cpp`, and `config/policy.json`; encode all fixed policies from `research.md`, monotonic clocks and resource ceilings, with tests that model-supplied policies cannot enlarge hard media/storage limits.
+- [ ] T017 Implement validated environment/policy loading and redacted logs in `backend/infrastructure/RuntimeConfig.cpp`, `backend/infrastructure/Logger.cpp`, and `config/policy.json`; encode all fixed policies from `research.md`, monotonic clocks and resource ceilings, with tests that model-supplied policies cannot enlarge hard media/storage limits. Make MAX_UPLOAD_ATTEMPTS an explicit environment edit point with default3 in config/policy.json, integer range0–100 and 0=unlimited; snapshot it per session.
 - [ ] T018 Implement the application composition root and session cleanup hooks in `backend/app/Main.cpp`; inject module public interfaces, establish graceful shutdown and RAII cleanup of request spools/buffers, and ensure a readiness failure does not instantiate fake inference/OCR/TTS behavior.
-- [ ] T019 Implement pre-body upload reservation and validation in `backend/modules/recognition-session/infrastructure/MediaAdmissionController.cpp`; expose `/internal/admit-media` privately, reserve one upload atomically, validate original request ownership, return an internal nonce, reject a second upload before spooling and enforce 60-second body/65-second admission cleanup deadlines.
+- [ ] T019 Implement pre-body upload reservation and validation in `backend/modules/recognition-session/infrastructure/MediaAdmissionController.cpp`; expose `/internal/admit-media` privately, reserve one upload atomically, validate original request ownership, return an internal nonce, reject a second upload before spooling and enforce 60-second body/65-second admission cleanup deadlines. Count only granted admission attempts, never consume successful-upload ownership on failure, release partial-spool reservations before retries and return UPLOAD_ATTEMPTS_EXHAUSTED at a finite budget.
 - [ ] T020 Provide tested multi-stage `Dockerfile`, `compose.yaml`, `config/Caddyfile`, and `config/demo.env.example`; build backend-runtime/web-runtime targets, proxy same-origin HTTPS with trusted internal CA, protect the private admission route, use read-only non-root backend with 4-GiB memory/256-MiB tmpfs and no core dumps, cap multipart bodies at 101 MiB and memory spooling at 10 MiB, persist only CA state, and document host/VM swap verification.
 
 **Checkpoint**: T009/T010 pass against the foundation; real model readiness may remain unavailable.
@@ -91,7 +92,7 @@ uncertain/unreadable/unsupported information is not fabricated, with visual resu
 
 ### Tests for User Story 1
 
-- [ ] T021 [P] [US1] Write image/camera/media/audio HTTP contract tests in `backend/tests/integration/ImageRecognitionContractTest.cpp` covering input modes, limits, accepted/uncertain results, no-result status, WAV ownership, missing bundle readiness and known-error responses.
+- [ ] T021 [P] [US1] Write image/camera/media/audio HTTP contract tests in `backend/tests/integration/ImageRecognitionContractTest.cpp` covering input modes, limits, accepted/uncertain results, no-result status, WAV ownership, missing bundle readiness and known-error responses. Include failed-first/valid-second uploads, one accepted source, budget exhaustion/reset, 0-unlimited behavior and stateRevision response assertions.
 - [ ] T022 [P] [US1] Write dataset/export/parity tests in `training/tests/test_model_handoff.py` for provenance, group leakage, class order, manifest hashes, exact tensors/preprocessing, trained-framework/export/native agreement and failure on incompatible models.
 - [ ] T023 [P] [US1] Write detection/crop/OCR/speech boundary tests in `backend/tests/integration/NativeRecognitionTest.cpp` for non-square images, partial-edge boxes, letterboxing, finite scores, unreadable text, PCM ownership and unavailable native resources.
 - [ ] T024 [P] [US1] Write source selection, permission, single-frame transfer and generated-audio playback tests in `frontend/tests/e2e/HearSignInformation.spec.ts`; use deterministic test-only fixtures and assert no microphone permission, visual dependency or browser speech synthesis.
@@ -108,21 +109,21 @@ uncertain/unreadable/unsupported information is not fabricated, with visual resu
 - [ ] T032 [US1] Implement native parity inference mode in `backend/app/EvaluateMain.cpp` and Python comparison in `training/road_sign_training/check_parity.py`; verify trained-framework versus export and native outputs with atol1e-4/rtol1e-3, identical fixture labels and restored boxes within1 pixel, including explicit threshold-boundary expectations.
 - [ ] T033 [US1] Run dataset validation, custom training, export and native parity after T027–T032; produce `models/signs-v1/manifest.json`, `models/signs-v1/parity.json`, and `reports/training-v1/run.json` with real hashes/results, recording missing data/compute as unfinished work rather than marking model acceptance complete.
 - [ ] T034 [US1] Implement worker-owned English Tesseract extraction in `backend/modules/text-extraction/infrastructure/TesseractTextClient.cpp`; enforce crop minimum16x16/longest-edge1600, appropriate segmentation and word-confidence>=70, Unicode normalisation and correct RAII deletion of returned text; test unreadable/empty/multiline signs and never invent missing words.
-- [ ] T035 [US1] Implement still-image accepted-information rules in `backend/modules/announcements/domain/AcceptImageInformationUseCase.cpp`; preserve "trackId, revision uint32, category, displayText, normalizedText, priority, capture reference", require score>=0.75 for stills and accepted OCR confidence, mark truncated descriptions as partial and quote observed information without route/crossing decisions.
+- [ ] T035 [US1] Implement still-image accepted-information rules in `backend/modules/announcements/domain/AcceptImageInformationUseCase.cpp`; preserve "trackId, revision uint32, category, displayText, normalizedText, priority, capture reference", require score>=0.75 for stills and accepted OCR confidence, mark truncated descriptions as partial and quote observed information without route/crossing decisions. Store LatestAcceptedDescription in backend/modules/announcements/domain/LatestAcceptedDescription.hpp with descriptionId UUID, epoch, trackId/revision, text<=500 characters and acceptedAtMs; it must not require a previously started announcement.
 - [ ] T036 [US1] Implement serialised retrieval-mode eSpeak NG and owned WAV output in `backend/modules/speech/infrastructure/EspeakSpeechClient.cpp`; preserve "announcementId, WAV bytes, sampleRateHz, durationMs, epoch, audioGeneration", "<=45 seconds", en-gb/160 words per minute and <=500-character input, with cancellation-safe callbacks and no server sound-device output.
-- [ ] T037 [US1] Implement the initial single-offer speech lifecycle in `backend/modules/announcements/application/AnnouncementService.cpp`; preserve "announcementId UUID, trackId/revision, text <=500 characters, priority, isReplay, epoch, audioGeneration, created/expiry times, state" and signature `(trackId, revision)`; offer only one WAV, suppress duplicate pending/synthesizing/offered work, enforce expiry and started/ended/cancelled/failed handling before slot reuse.
+- [ ] T037 [US1] Implement the initial single-offer speech lifecycle in `backend/modules/announcements/application/AnnouncementService.cpp`; preserve "announcementId UUID, trackId/revision, text <=500 characters, priority, isReplay, epoch, audioGeneration, created/expiry times, state" and signature `(trackId, revision)`; offer only one WAV, suppress duplicate pending/synthesizing/offered work, enforce expiry and started/ended/failed playback handling and separate cancellation-receipt acknowledgment before slot reuse. Implement CancellationReceipt in backend/modules/announcements/domain/CancellationReceipt.hpp: UUID cancellationId, cancelThroughAudioGeneration, five-second deadline, at most one pending plus last acknowledged receipt; fence all matching artifacts and never confuse stale playback results with cancellation acknowledgment.
 - [ ] T038 [US1] Wire the image/camera pipeline in `backend/modules/recognition-session/application/RecogniseFrameUseCase.cpp`; compose media, inference, OCR, acceptance and speech only through public interfaces, fence late callbacks, produce no-result image status and leave completed image results reviewable.
-- [ ] T039 [US1] Implement frame/media and audio/playback handlers in `backend/modules/recognition-session/infrastructure/RecognitionController.cpp`; use admission nonces for uploads, correct SSE result/audio schemas, session-owned WAV fetch with residual-validity header, safe error statuses and no-store; unsupported video operation remains explicit until US2 implements decoding.
+- [ ] T039 [US1] Implement frame/media and audio/playback handlers in `backend/modules/recognition-session/infrastructure/RecognitionController.cpp`; use admission nonces for uploads, correct SSE result/audio schemas, session-owned WAV fetch with residual-validity header, safe error statuses and no-store; unsupported video operation remains explicit until US2 implements decoding. Publish description.latest and origin in audio.ready; implement the separate cancellationId acknowledgment endpoint with old-target acceptance, supersession and idempotency per api.md.
 - [ ] T040 [US1] Implement typed session API/EventSource client and revision-aware reducer in `frontend/src/modules/recognition-session/SessionClient.ts` and `frontend/src/modules/recognition-session/SessionStore.ts`; reject stale messages, keep secrets only in memory, close EventSource on error, send heartbeats and require explicit restart.
 - [ ] T041 [US1] Implement image upload and bounded camera capture in `frontend/src/modules/media-input/MediaInput.tsx` and `frontend/src/modules/media-input/CameraCaptureService.ts`; request rear-facing camera as preference, capture JPEG quality0.8 at<=5Hz with one outstanding POST, skip stale frames, show limits and release tracks on stop/failure/hidden page.
 - [ ] T042 [US1] Implement native-generated audio playback in `frontend/src/modules/audio-feedback/AudioPlaybackService.ts`; activate AudioContext on user gesture, fetch/decode one WAV, subtract elapsed fetch/decode time from residual validity, validate epoch/generation again before starting, send playback acknowledgments and cancel locally before waiting for network cleanup.
 - [ ] T043 [US1] Compose the initial labelled source/start/stop/status interface in `frontend/src/modules/recognition-session/RecognitionPage.tsx` and `frontend/src/App.tsx`; expose privacy and unavailable-model status, provide a safe stop action and optional non-live result text, and do not present US2/US3 controls as implemented until wired.
-- [ ] T044 [US1] Execute the independent image/camera scenarios with the verified bundle and save sanitised evidence in `reports/acceptance/us1.md`; run T021–T024 plus module unit tests, verify all eight categories on reference fixtures and separate model errors from deterministic contract failures.
+- [ ] T044 [US1] Execute the uploaded-image subset of US1 scenarios with the verified bundle and save sanitised evidence in `reports/acceptance/us1-image.md`; run image-relevant T021–T024 cases and module unit tests, record camera cases as pending T048–T054/T058, and do not advertise full US1 completion at this checkpoint.
 
-**Checkpoint**: Full US1 is testable without optional visual review or the research reporting UI.
-An uploaded-image demonstration is the first integration milestone; full continuous assistive use
-still requires US2 repetition handling and US3 audio/accessibility controls. T033/T044 cannot pass
-on fake or generic weights.
+**Checkpoint**: The US1 uploaded-image slice is independently testable. Full US1 camera acceptance
+is deliberately deferred to T058 after temporal consensus exists; capabilities must keep live
+recognition unavailable until T054 integrates that policy. T033/T044 cannot pass on fake weights.
+The complete P1 experience additionally requires US3 controls and recovery.
 
 ---
 
@@ -153,7 +154,7 @@ fixed observations independently from detector quality.
 - [ ] T055 [US2] Add video upload, timestamped progress, EOF review and labelled seek in `frontend/src/modules/media-input/VideoInput.tsx`; coordinate seek through `frontend/src/modules/recognition-session/SessionClient.ts`, await authoritative epoch/stateRevision and clear old results/audio before resuming.
 - [ ] T056 [US2] Add streaming scenario tests in `frontend/tests/e2e/TrackSigns.spec.ts` for upload/live sequences, early new-epoch SSE before HTTP replies, stale offered audio, seek during fetch and backend/frontend cancellation agreement.
 - [ ] T057 [US2] Verify long-run tracking/queue limits with a deterministic ten-minute sequence in `backend/modules/sign-recognition/tests/TrackingSoakTest.cpp`; assert <=100 tracks, bounded removed/OCR histories, one active/one pending frame and no lingering ended-session references under sanitizers.
-- [ ] T058 [US2] Run all US2 independent scenarios and regress US1, recording observed identities, automatic versus intentional repeats and cancellation outcomes in `reports/acceptance/us2.md`; do not present fixture success as held-out tracking accuracy.
+- [ ] T058 [US2] Run US2 independent scenarios and complete the deferred full US1 camera acceptance after T048–T054; record identities, automatic/manual repeats and cancellation outcomes in `reports/acceptance/us2.md` and camera evidence in `reports/acceptance/us1-camera.md`; regress the image slice, run the remaining T021–T024 camera cases, and distinguish fixture success from held-out quality.
 
 **Checkpoint**: US2 is independently measurable on annotated video and policy fixtures; its full
 integration depends on the US1 pipeline. No fixed minimum FPS/accuracy has been invented.
@@ -171,16 +172,16 @@ capture or speech. Backend controls can be tested with deterministic audio obser
 
 ### Tests for User Story 3
 
-- [ ] T059 [P] [US3] Write backend audio-control tests in `backend/modules/recognition-session/tests/AudioControlsTest.cpp` for mute/generation changes, unmute without backlog, empty/muted repeat, blocked activation, stale acknowledgments and missing-cancel-ack session termination.
-- [ ] T060 [P] [US3] Write state/playback race tests in `frontend/src/modules/audio-feedback/AudioPlaybackService.test.ts` for immediate mute/stop, rapid mute-unmute intent ordering, expired GET validity, superseded fetches and no playback-slot reuse before confirmed cancellation.
+- [ ] T059 [P] [US3] Write backend audio-control tests in `backend/modules/recognition-session/tests/AudioControlsTest.cpp` for mute/generation changes, unmute without backlog, empty/muted repeat, blocked activation, stale acknowledgments and missing-cancel-ack session termination. Test acknowledgments for cutoff k after generation k+1, cancel-all behavior, latest completed receipt replay and unknown/superseded IDs, plus first-image recovery without any started history.
+- [ ] T060 [P] [US3] Write state/playback race tests in `frontend/src/modules/audio-feedback/AudioPlaybackService.test.ts` for immediate mute/stop, rapid mute-unmute intent ordering, expired GET validity, superseded fetches and no playback-slot reuse before confirmed cancellation. Test Read latest result after initial audio rejection, stale descriptionId, coalesced recovery clicks and barrier acknowledgment independent of epoch filtering.
 - [ ] T061 [P] [US3] Write keyboard/focus/status and recovery tests in `frontend/tests/e2e/AccessibleControls.spec.ts` for every control, hidden visuals, non-live transcripts, denial/revocation, malformed uploads, EventSource failure, hidden-page cleanup and no automatic resume.
 
 ### Implementation for User Story 3
 
-- [ ] T062 [US3] Implement mute/unmute/enable/repeat orchestration and endpoint in `backend/modules/recognition-session/application/ControlAudioUseCase.cpp` and `backend/modules/recognition-session/infrastructure/AudioControlsController.cpp`; increment stateRevision/audioGeneration, clear pending work, coalesce repeated clicks, enforce isReplay=true and unavailable-state responses without reviving cancelled artifacts.
-- [ ] T063 [US3] Complete generation-safe control reconciliation in `frontend/src/modules/recognition-session/SessionStore.ts`; serialize seek/audio commands, accept newer authoritative session.state before late HTTP replies, ignore older revisions and preserve immediate local mute/stop intent across in-flight unmute responses.
-- [ ] T064 [US3] Complete audio recovery, repeat and cancellation acknowledgment in `frontend/src/modules/audio-feedback/AudioPlaybackService.ts`; handle blocked context, Enable audio, playback timeout/cancel and no backlog on unmute, and clear decoded buffers/object URLs on generation/session change.
-- [ ] T065 [US3] Add labelled native controls and accessible state/reason text in `frontend/src/modules/audio-feedback/AudioControls.tsx` and `frontend/src/modules/recognition-session/SessionControls.tsx`; implement the prescribed control order, visible focus and no-result/empty-repeat/muted behavior without hidden shortcuts or visual-only indications.
+- [ ] T062 [US3] Implement mute/unmute/enable/repeat orchestration and endpoint in `backend/modules/recognition-session/application/ControlAudioUseCase.cpp` and `backend/modules/recognition-session/infrastructure/AudioControlsController.cpp`; increment stateRevision/audioGeneration, clear pending work, coalesce repeated clicks, enforce isReplay=true and unavailable-state responses without reviving cancelled artifacts. Add recover action for the current descriptionId, origin=recovery/isReplay=true and no restored automatic backlog; include stateRevision in every control response and queue behind a pending cancellation barrier.
+- [ ] T063 [US3] Complete generation-safe control reconciliation in `frontend/src/modules/recognition-session/SessionStore.ts`; serialize seek/audio commands, accept newer authoritative session.state before late HTTP replies, ignore older revisions and preserve immediate local mute/stop intent across in-flight unmute responses. Retain description.latest for the current epoch and process cancellation receipts before stale-epoch filtering; clear latest accepted information on seek/end.
+- [ ] T064 [US3] Complete audio recovery, repeat and cancellation acknowledgment in `frontend/src/modules/audio-feedback/AudioPlaybackService.ts`; handle blocked context, Enable audio, playback timeout/cancel and no backlog on unmute, and clear decoded buffers/object URLs on generation/session change. Use /cancellations/{cancellationId}/ack, not playback status=cancelled; acknowledge only after matching buffers/fetches/playback stop. Read latest result may recover an accepted description whose first playback never started.
+- [ ] T065 [US3] Add labelled native controls and accessible state/reason text in `frontend/src/modules/audio-feedback/AudioControls.tsx` and `frontend/src/modules/recognition-session/SessionControls.tsx`; implement the prescribed control order, visible focus and no-result/empty-repeat/muted behavior without hidden shortcuts or visual-only indications. Provide Read latest result independently from Repeat latest, show unavailable/muted reasons and remaining upload attempts; zero limit is labelled unlimited.
 - [ ] T066 [US3] Implement coalesced polite status and nonduplicated error recovery in `frontend/src/modules/recognition-session/SessionStatus.tsx`; cover busy/unavailable/permission/input/connection/audio errors without focus theft, per-frame announcements or simultaneous automatic transcript speech.
 - [ ] T067 [US3] Complete cleanup for stop, hidden page, source replacement, disconnect and aborted uploads in `frontend/src/modules/recognition-session/SessionLifecycleService.ts`; abort fetches, stop camera, close EventSource, silence audio and clear temporary state immediately, treating server cleanup as asynchronous and new sessions as fresh.
 - [ ] T068 [US3] Test trusted-HTTPS camera/audio and actual screen readers across the UI-contract desktop/phone matrix, recording OS/browser/assistive versions and pass/fail primary tasks in `reports/accessibility/device-matrix.md`; automated WebKit or axe results cannot substitute for physical phone/assistive tests.
@@ -203,13 +204,13 @@ condition count, provenance field and explicit missing-evidence indication.
 
 ### Tests for User Story 4
 
-- [ ] T071 [P] [US4] Write result/history tests in `frontend/src/modules/results-review/ResultsReview.test.tsx` for matching frame/box/text, optional visuals, non-live accessible review, intentional-replay labels, truncation and session/epoch clearing.
+- [ ] T071 [P] [US4] Write result/history tests in `frontend/src/modules/results-review/ResultsReview.test.tsx` for matching frame/box/text, optional visuals, non-live accessible review, intentional-replay labels, truncation and session/epoch clearing. Test unavailable local video decoding/synchronisation produces accessible text/audio fallback and no thumbnail request.
 - [ ] T072 [P] [US4] Write evaluation arithmetic/schema tests in `training/tests/test_evaluation.py` using hand-computed detections, missing/unmatched OCR regions, ID switches and automatic/replay events; verify denominators, timing clock domains, condition counts and no implied success on absent evidence.
 
 ### Implementation for User Story 4
 
 - [ ] T073 [US4] Implement bounded HistoryEntry and review snapshots in `backend/modules/announcements/domain/HistoryEntry.hpp` and `backend/modules/announcements/application/HistoryService.cpp`; preserve "announcementId, text, isReplay, playback outcome, startedAt" and "Latest 200 only; accessible notice on truncation; cleared at session end", retain only latest repeat text separately and never persist histories.
-- [ ] T074 [US4] Implement optional matching-frame overlays and review text in `frontend/src/modules/results-review/ResultsReview.tsx`; align boxes to sampled camera frame or video source timestamp, preserve accessible text when visuals are hidden and do not attach stale boxes to unrelated pixels.
+- [ ] T074 [US4] Implement optional matching-frame overlays and review text in `frontend/src/modules/results-review/ResultsReview.tsx`; align boxes to sampled camera frame or video source timestamp, preserve accessible text when visuals are hidden and do not attach stale boxes to unrelated pixels. For unsupported local video rendering, disable overlays with an accessible explanation and keep text/audio review; do not implement a server preview-image endpoint.
 - [ ] T075 [US4] Implement chronological announcement history in `frontend/src/modules/results-review/AnnouncementHistory.tsx`; derive entries from current-session playback events, label intentional replay/outcome, cap200 and show truncation, and clear on seek/end/new session without storage persistence.
 - [ ] T076 [US4] Extend the offline native evaluator in `backend/app/EvaluateMain.cpp` to process authorised labelled media through the real public pipeline, export detections/OCR/identities/announcements and stage timings to the explicit output directory, and prevent the online server from writing offline research mounts.
 - [ ] T077 [US4] Implement metric aggregation and EvaluationRun validation in `training/road_sign_training/evaluate.py` and `training/road_sign_training/evaluation_run.py`; preserve "runId, dataset/model/config hashes, environment, sampled counts, metrics, failures, study summary" and "user participants identified by study codes, not session media"; compute ranked mAP at floor0.001/max300 before tracking, separate runtime P/R, end-to-end/matched CER/WER, IDF1/switches/fragmentation and replay-excluded duplicates with the quickstart definitions.
@@ -233,7 +234,7 @@ artifacts/evidence; executable metric tooling alone does not complete the resear
 - [ ] T085 Run native builds/unit/contracts/integration, ASan+UBSan, separate TSan, Python checks, strict TS/lint, frontend tests and browser workflows, recording actual commands/results and any unsupported instrumentation in `reports/validation/final-checks.md`; fix failures in scoped files with regression tests and do not suppress checks to pass.
 - [ ] T086 Validate both Docker build targets, Compose startup/readiness, non-root/resource bounds, proxy admission and physical-phone HTTPS trust using `Dockerfile`, `compose.yaml`, and `config/Caddyfile`; record native dependency/model hashes, host swap state and any failed deployment checks in `reports/validation/deployment.md`.
 - [ ] T087 Update `README.md` and `specs/001-assistive-sign-recognition/quickstart.md` to the commands actually implemented and exercised; document dependency bootstrap, dataset/model acquisition, CA trust, privacy boundaries, measured limitations and cleanup without claiming unexecuted tests passed.
-- [ ] T088 Audit every requirement and evidence gate against the constitution in `reports/validation/completion.md`; verify no production stubs, runtime Python, private cross-module includes, unexpected persistence or scope additions, leave unfinished external-data/device/study tasks unchecked and do not commit anything without a new user instruction.
+- [ ] T088 Audit every requirement and evidence gate against the constitution in `reports/validation/completion.md`; verify no production stubs, runtime Python, private cross-module includes, unexpected persistence or scope additions, leave unfinished external-data/device/study tasks unchecked and commit coherent validated increments using explicit paths while leaving the constitution uncommitted.
 
 ---
 
@@ -242,7 +243,7 @@ artifacts/evidence; executable metric tooling alone does not complete the resear
 ### Phase Dependencies
 
 ```text
-Setup T001–T008 -> Foundations T009–T020 -> US1 T021–T044
+Setup T001–T008 -> Foundations T009–T020 -> US1 image slice T021–T044
                                              |
                        +---------------------+---------------------+
                        v                                           v
@@ -259,12 +260,13 @@ Setup T001–T008 -> Foundations T009–T020 -> US1 T021–T044
 
 The default execution is sequential by phase. Overlap is optional and restricted below; the graph
 does not imply all story implementations are independent. Each story has its own observable test,
-but full-stack US2 builds on US1 and full US3 validation needs US2 seek/continuous behavior.
+but full-stack US2 builds on the US1 image/native pipeline and completes its camera acceptance;
+full US3 validation needs US2 seek/continuous behavior.
 
 ### User Story Dependencies
 
 - **US1**: Requires foundations and an authorised dataset plus a verified custom bundle for final
-  acceptance. Its native adapters and UI can be developed with test-only fixtures while data work
+  image acceptance. Full camera acceptance waits for T058. Its native adapters and UI can be developed with test-only fixtures while data work
   is pending; do not mark T033/T044 complete without real evidence.
 - **US2**: Requires US1's media/inference/OCR/speech contracts and implementation. Pure tracker and
   scheduler tests can be authored earlier against public contracts, but integration waits for US1.
@@ -293,10 +295,10 @@ but full-stack US2 builds on US1 and full US3 validation needs US2 seek/continuo
 
 | Wave | Prerequisite | Disjoint tasks |
 |------|--------------|----------------|
-| Setup packages/provenance | T001–T002 | T003, T004, T005 |
+| Setup packages/provenance | T001–T002 | T003, T004 |
 | Foundation tests | Phase1 complete | T009, T010 |
 | US1 contract/test design | Phase2 complete | T021, T022, T023, T024 |
-| US2 policy/video test design | US1 complete | T045, T046, T047 |
+| US2 policy/video test design | US1 image slice complete | T045, T046, T047 |
 | US3 controls/test design | US2 complete | T059, T060, T061 |
 | US4 review/metrics test design | US3 complete | T071, T072 |
 | Cross-cutting integration tests | US4 complete | T083, T084 |
@@ -313,7 +315,7 @@ interfaces before running implementation-dependent tests. Then proceed with T025
 
 ## Parallel Example: User Story 2
 
-After US1, author T045 tracker tests, T046 scheduler tests and T047 uploaded-video contract tests
+After the US1 image slice, author T045 tracker tests, T046 scheduler tests and T047 uploaded-video contract tests
 together. Each has distinct files and controlled time/observations. Integrate T048–T055 in order;
 shared scheduler/orchestration edits are not parallel tasks.
 
@@ -362,8 +364,8 @@ once their actual input/model/device prerequisites are present.
 
 ### MVP First (User Story 1)
 
-Complete setup/foundations, then US1 with a real custom model. Use uploaded images as the first
-end-to-end integration milestone, then finish US1's camera path. This MVP demonstrates recognition
+Complete setup/foundations, then the US1 image slice with a real custom model. Finish its camera
+acceptance at T058 after temporal policy is integrated. The image MVP demonstrates recognition
 and speech; it is not the complete assistive prototype until US2 and US3 P1 behavior is validated.
 If real dataset/model inputs are unavailable, continue independent tooling/tests and explicitly
 retain the data/training/real-recognition tasks as incomplete; do not downgrade the acceptance gate.
@@ -371,8 +373,8 @@ retain the data/training/real-recognition tasks as incomplete; do not downgrade 
 ### Incremental Delivery
 
 1. Setup/foundations establish deterministic contracts, ownership and delivery.
-2. US1 delivers recognisable image/camera information and native speech.
-3. US2 adds video, stable identities, text consensus and bounded relevant announcements.
+2. The US1 image slice delivers recognition and native speech; camera acceptance remains pending.
+3. US2 completes camera acceptance and adds video, stable identities, text consensus and bounded announcements.
 4. US3 completes accessible control/recovery and real-device evidence.
 5. US4 adds optional review and actual research outcomes.
 6. Final validation exercises packaging, memory safety, isolation and documented run instructions.
@@ -387,7 +389,7 @@ complete them by inventing evidence. No parallel execution is launched by genera
 ## Notes
 
 - Every task remains unchecked until its implementation or evidence deliverable is verified.
-- This task list does not authorize commits, application deployment, participant contact or
-  collection of data without permission. Preparing local code/tests/docs is distinct from outreach.
+- Frequent scoped rollback commits are authorised. Cloud deployment, participant contact and data
+  collection still require their own applicable authorisation; no deployment occurs in planning.
 - Do not modify the constitution or checked requirements checklist as a shortcut around failures.
 - Numerical model quality remains a research report; functional behavior and privacy are test gates.

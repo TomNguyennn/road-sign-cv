@@ -7,10 +7,12 @@ without persistent session storage, source selection, controls, status, and opti
 No login, onboarding wizard, automatic camera access, or hidden keyboard shortcuts.
 
 Use native labelled controls in this order: input mode; file picker when applicable; Start;
-Stop; Mute/Unmute; Repeat latest; Enable audio when activation failed; video seek when applicable;
+Stop; Mute/Unmute; Repeat latest; Enable audio when activation failed; Read latest result when accepted information exists; video seek when applicable;
 Show visual results. All must expose accessible name, role, enabled state, keyboard operation,
 logical focus order, and visible focus. Disabled controls have an adjacent explanation when their
-reason is not obvious. File constraints are available before choosing a file.
+reason is not obvious. File constraints and effective upload-attempt limit are available before choosing a file. A failed
+admitted upload shows attempts used/remaining and permits another attempt; exhausted budgets offer
+end/start recovery. Zero configured maximum is labelled unlimited, not zero permitted attempts.
 
 Start requests camera permission only for camera mode and activates AudioContext from the user
 interaction. Failure of either step must not leave invisible capture running. Default camera
@@ -19,8 +21,10 @@ requested. Preview video is muted and inline. Pause capture on hidden page by en
 returning to the page requires explicit Start and an accessible explanation.
 
 A single audio source plays server-generated WAV. The browser does not synthesize speech. An
-Enable audio control recovers from browser restrictions without silently replaying a stale queue.
-Repeat plays only the latest started description when unmuted. Stop, mute, and disconnect take
+Enable audio resumes future dispatch without replaying old results. Read latest result explicitly
+activates audio and requests recovery of the current descriptionId, including an image whose first
+announcement never started. Show it independently of Repeat latest, which plays only the latest
+started description when unmuted. Both respect mute; no accepted result means recovery is unavailable. Stop, mute, and disconnect take
 local effect immediately, irrespective of HTTP completion.
 
 ## Status versus recognition content
@@ -35,8 +39,9 @@ does not silence screen-reader status. The browser cannot control another assist
 manual reading may overlap, and the app must not claim to prevent external audio overlap.
 
 When visual results are hidden, accessible controls, status and review text remain available.
-Camera overlays use the matched sampled frame; uploaded video overlays align to source timestamp
-or display the corresponding sampled frame when synchronisation is unavailable. Do not silently
+Camera overlays use locally retained matched frames; uploaded video overlays require local decoding
+and matching source timestamps. If either is unavailable, disable that overlay, explain accessibly
+and retain text/audio review. There is no server-supplied sampled-frame fallback. Do not silently
 paint old boxes on unrelated live pixels. History shows last 200 entries and a truncation message;
 it is cleared with session end.
 

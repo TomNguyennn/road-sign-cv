@@ -47,7 +47,7 @@ docker compose logs --tail 50 backend
 
 The implementation must provide `config/demo.env.example`; copy it to ignored `config/demo.env`
 and set `DEMO_HOST` to a LAN-resolvable hostname or host IP, `MODEL_BUNDLE_PATH=/models/signs-v1`,
-and the declared model mount path. Compose service images match the two build tags above. Only
+the declared model mount path, and `MAX_UPLOAD_ATTEMPTS=3` (0 means unlimited attempts). Compose service images match the two build tags above. Only
 Caddy exposes port 443; the C++ service is reachable on the internal network. Caddy `tls internal`
 uses persistent certificate state only. Backend runs non-root, read-only, with 256 MiB tmpfs at
 `/run/road-sign`, a 4 GiB memory limit, no core dumps, and no user-media persistent volume.
@@ -100,7 +100,7 @@ Run a separate integration suite against the real verified bundle.
 | Warning arrives behind general information | priority selection for next slot, no overlap, stale item discarded | FR-007, SC-003 |
 | Mute during synthesis/fetch/playback, stop, seek | immediate local silence and no late old-generation output | FR-008/012, SC-003 |
 | Keyboard and real screen readers, visuals hidden | all tasks operable, status available, transcripts not auto-spoken twice | FR-009/010, SC-002/008 |
-| Denied permission, bad file, autoplay failure, connection loss | accessible recovery; no silent capture or auto-resume | FR-011/012, SC-001/002 |
+| Denied permission, bad file, first-image autoplay failure, connection loss | retry within upload budget; Read latest result speaks accepted text without prior playback; no backlog or auto-resume | FR-011/012, SC-001/002 |
 | Second client and wrong-cookie/CSRF requests | busy or ownership error, no previous user's result exposure | FR-013/014, SC-010 |
 | Stop during upload and container restart | partial media spools removed; no user data in volumes/logs/browser storage | FR-014, SC-010 |
 | Dataset/export audit and native parity | provenance, grouped splits, correct eight-class shape/hash, matching predictions | FR-015/016, SC-004–009 |
@@ -139,6 +139,23 @@ never ordinary demo images, transcripts or audio. Trace model/config/environment
 Tag real evaluation scenes by lighting, motion, angle and quality; report sample counts and
 missing coverage. Perform the five-participant study in contracts/ui.md with documented tasks,
 consent and ratings. Recruitment or data gaps remain incomplete outcomes, not invented results.
+
+## Remediation regression scenarios
+
+- Assert stateRevision is present and monotonic in creation, seek, audio-control and ending replies.
+- With MAX_UPLOAD_ATTEMPTS=3, reject an invalid first upload and accept a valid second one; reject
+  further /media after acceptance. Test three admitted failures and the accessible new-session
+  recovery, pre-admission rejection not consuming budget, and 0 meaning unlimited attempts.
+- Fence generation k on mute/seek/timeout, then acknowledge cancellationId with cutoff k while
+  current generation is k+1; accept it. Ignore ordinary stale playback results. Test duplicate and
+  superseded cancellation receipts and termination after missing acknowledgment.
+- Reject the first image's audio activation, then use Read latest result: speak that accepted
+  description once without prior started history. Reject stale description IDs, respect mute,
+  coalesce repeated manual recovery clicks, and never replay an automatic queue.
+- Disable local video decoding/synchronisation in a test: show text/audio and an overlay-unavailable
+  explanation; do not request a nonexistent server thumbnail endpoint.
+- Image-only acceptance may run before tracking; full US1 camera acceptance must wait for US2's
+  tracking/temporal-consensus integration. Capture dependency hashes after package locks resolve.
 
 ## Shutdown
 

@@ -27,16 +27,17 @@ Readiness checks expose no filesystem paths, raw media, text or stack traces.
 | GET /health | none | 200 `{status:"ok"}` process liveness |
 | GET /ready | none | 200 `{status:"ready",modelId}` after bundle verified; otherwise 503 |
 | GET /capabilities | none | 200 supported input types/limits, catalogue, policyVersion; safe public configuration |
-| POST /sessions | `{sourceKind:"camera"\|"image"\|"video"}` | 201 `{sessionId,csrfToken,epoch:1,audioGeneration:1,eventsUrl}`; 409 BUSY if lease held |
+| POST /sessions | `{sourceKind:"camera"\|"image"\|"video"}` | 201 `{sessionId,csrfToken,epoch:1,audioGeneration:1,stateRevision,eventsUrl,uploadAttemptsUsed:0,maxUploadAttempts}`; 409 BUSY if lease held |
 | GET /sessions/{id}/events | cookie; Accept text/event-stream | 200 SSE; exactly one attachment; attach within 10 s; duplicate attach 409 |
 | POST /sessions/{id}/heartbeat | `{epoch}` | 204, extends lease 15 s; requires owning cookie/CSRF |
 | POST /sessions/{id}/frames | raw image/jpeg; headers `X-Epoch`, `X-Frame-Id`, `X-Source-Time-Ms`, `X-Capture-Time-Ms` | 202 `{frameId,epoch}`; camera only, max 1 MiB, <=1280x720 |
-| POST /sessions/{id}/media | multipart field `file`; header `X-Epoch` | 202 `{epoch}` after format/limits validated; image/video only, once per session |
-| POST /sessions/{id}/seek | `{epoch,positionMs}` | 200 `{epoch:newEpoch,audioGeneration}`; video only; clears old tracks/results/audio; bounds 0<=positionMs<duration |
-| POST /sessions/{id}/audio | `{action:"mute"\|"unmute"\|"enable"\|"repeat",epoch}` | 200 `{isMuted,isAudioBlocked,audioGeneration}`; repeat while muted/empty 409 |
+| POST /sessions/{id}/media | multipart field `file`; header `X-Epoch` | 202 `{epoch,uploadAttemptsUsed,maxUploadAttempts}` after format/limits validated; image/video only; at most one successfully accepted upload per session; failed attempts may retry within the attempt budget |
+| POST /sessions/{id}/seek | `{epoch,positionMs}` | 200 `{epoch:newEpoch,audioGeneration,stateRevision}`; video only; clears old tracks/results/audio; bounds 0<=positionMs<duration |
+| POST /sessions/{id}/audio | `{action:"mute"\|"unmute"\|"enable"\|"repeat"\|"recover",epoch,descriptionId?}` | 200 `{isMuted,isAudioBlocked,audioGeneration,stateRevision}`; repeat while muted/empty 409; recover requires the current descriptionId and an activated client audio context |
 | GET /sessions/{id}/audio/{announcementId} | cookie | 200 audio/wav with `X-Audio-Valid-For-Ms` residual validity; stale/released 410 |
-| POST /sessions/{id}/playback | `{announcementId,epoch,audioGeneration,status,clientTimeMs}` | 204; status started/ended/cancelled/failed/blocked; never trust as proof of audible perception |
-| DELETE /sessions/{id} | cookie/CSRF, no body | 202 `{state:"ending"}`; immediately invalidates publication; client already stops capture/audio |
+| POST /sessions/{id}/playback | `{announcementId,epoch,audioGeneration,status,clientTimeMs}` | 204; status started/ended/failed/blocked; stale results are ignored; cancellation acknowledgment uses its separate endpoint |
+| POST /sessions/{id}/cancellations/{cancellationId}/ack | `{cancelThroughAudioGeneration}` plus owning cookie/CSRF | 204 for the matching barrier or its acknowledged duplicate; otherwise 410; no current-epoch/generation filter |
+| DELETE /sessions/{id} | cookie/CSRF, no body | 202 `{state:"ending",stateRevision}`; immediately invalidates publication; client already stops capture/audio |
 
 After cleanup the session endpoints return 404. DELETE of an already missing session returns 204
 only when origin/CSRF can still be validated; otherwise the normal authentication error applies.
@@ -66,8 +67,9 @@ Send standard SSE `event: <type>` and `data: <JSON>`, with no replayable `id` fi
 | session.state | `{state,audioGeneration,isMuted,isAudioBlocked,sourceTimeMs?,durationMs?}` |
 | frame.result | `{frameId,sourceTimeMs,clientCaptureTimeMs?,width,height,observations:[...]}` |
 | frame.dropped | `{frameId,reason:"superseded"}` |
-| audio.ready | `{announcementId,trackId,revision,audioGeneration,text,isReplay,audioUrl,durationMs,validForMs,frameId,clientCaptureTimeMs?}` |
-| audio.cancel | `{announcementId?,audioGeneration,reason}`; absent announcementId cancels all |
+| audio.ready | `{announcementId,trackId,revision,audioGeneration,text,isReplay,origin,audioUrl,durationMs,validForMs,frameId,clientCaptureTimeMs?}` |
+| audio.cancel | `{cancellationId,cancelThroughAudioGeneration,audioGeneration,reason}`; cancel every artifact through the specified generation |
+| description.latest | `{descriptionId,trackId,revision,text,acceptedAtMs}` for the current epoch; text is an accepted description, not raw OCR |
 | session.error | `{code,message,retryable}`; no raw library exception |
 | session.ended | `{reason:"stop"\|"disconnect"\|"leaseExpired"\|"failure"}` |
 
@@ -92,7 +94,8 @@ waiting for DELETE, so a slow network cannot keep the user's speaker active.
 
 Only one audio artifact may be offered/playing. Client fetches it, verifies session/epoch/generation
 again after fetch/decode, and starts only while unmuted, connected and not expired. Report started
-when AudioContext playback is scheduled, and ended on completion. Do not start the next artifact
+when AudioContext playback is scheduled, and ended on completion. Acknowledgments of cancellation
+use the cancellation ID, never the playback-status endpoint. Do not start the next artifact
 before prior completion/cancellation. Expired offered audio receives audio.cancel. A generation
 change cancels pending fetches and decoded buffers as well as playback.
 
@@ -112,7 +115,7 @@ X-Audio-Valid-For-Ms. The client starts a monotonic timer before the fetch and s
 fetch/decode duration from that residual lifetime (conservative under network delay). Reject if
 nonpositive. SSE validForMs is informational and never resets expiry on receipt. A late started
 acknowledgment for an expired item triggers cancellation, not silent acceptance. On playback timeout,
-send audio.cancel and await cancelled acknowledgment before reusing the slot; end the session if
+send audio.cancel and await its matching cancellation acknowledgment before reusing the slot; end the session if
 no acknowledgment arrives within 5 seconds. No missing acknowledgment implies playback stopped.
 
 For /media only, Caddy performs a body-free forward-auth GET to the private backend path
@@ -121,7 +124,7 @@ Origin and CSRF and atomically reserves the single global upload slot. Return an
 nonce copied into the proxied request; strip client-supplied admission headers first. Reject a
 second upload with 409 before it reaches Drogon's spool. The private route is never exposed by the
 proxy and all business checks remain in C++. Limit body-read time to 60 seconds. Release admission
-only after completion/abort cleanup; expire a stalled admission after 65 seconds and terminate its
+only after completion/abort cleanup; a failed upload does not consume the successful-upload slot; expire a stalled admission after 65 seconds and terminate its
 session before allowing another upload. Backend checks the nonce and removes partial request files.
 This is a resource admission guard, not another service or user-authentication system.
 
@@ -135,3 +138,78 @@ available. Uploaded-video source-time results are reported separately from live 
 
 The server exposes no online metrics endpoint containing transcripts, images or histories. Offline
 evaluation injects authorised fixtures into the same public pipeline interfaces and writes reports.
+
+## Upload attempts and editable policy (I2)
+
+`maxUploadAttempts` is the session snapshot of `MAX_UPLOAD_ATTEMPTS` from the server configuration.
+Default **3**; allowed values are integers 0–100, with **0 meaning unlimited attempts**. This is the
+explicit edit point: set `MAX_UPLOAD_ATTEMPTS` in `config/demo.env` (deployment environment override)
+or change the default in `config/policy.json`. Configuration is validated at startup; existing
+sessions keep their original limit. GET /capabilities and session creation expose the effective limit.
+
+Increment uploadAttemptsUsed once when the pre-body admission gate grants a new upload. Authentication,
+busy, stale-epoch, successful-slot-already-used and admission-rejection requests do not increment it.
+An admitted upload that aborts or fails validation counts as an attempt; remove its partial files
+and release admission, leaving awaitingInput so the next attempt is allowed while budget remains.
+Only a completely received, validated file committed as MediaSource consumes the successful-upload
+slot. Decoder/inference failures after that acceptance follow the processing-failure lifecycle.
+
+Upload acceptance and rejection responses include uploadAttemptsUsed and maxUploadAttempts for
+authenticated owners; error responses additionally use the standard error fields. A session with
+one accepted file returns 409 UPLOAD_ALREADY_ACCEPTED on another /media request; change source by
+ending it and creating a new session. At the finite attempt limit return 409 UPLOAD_ATTEMPTS_EXHAUSTED
+before reading a new body. Explain that the user can end/start a session and try again; retain no
+failed file. A failed upload must never silently become a successful upload or block the next valid
+attempt solely because a previous request was sent. Do not automatically retry uploads on network
+uncertainty: reconcile the session.state event first to avoid duplicate acceptance.
+
+## Cancellation barriers (U1)
+
+A cancellation is a distinct receipt, not a playback result. Before mute, seek or timeout fences
+audio generation k, allocate a UUID cancellationId, record cancelThroughAudioGeneration=k, then
+advance audioGeneration to k+1 (it never resets during a session, including seeks). Emit audio.cancel
+for the current session. It invalidates every offered, fetched, decoded or playing artifact with
+generation<=k, across old source epochs. Do not offer another artifact until the barrier is acknowledged.
+
+The client processes audio.cancel for its current session before ordinary stale-epoch filtering.
+It stops matching playback, aborts matching fetches, drops matching buffers, then POSTs to the
+cancellation acknowledgment endpoint with the exact cancellationId and cancelThroughAudioGeneration.
+The server looks up the outstanding receipt using authenticated session ownership; it MUST NOT reject
+this acknowledgment merely because its target generation/epoch is older than current state. It cannot
+mark any description spoken or restore playback. Ordinary started/ended/failed/blocked results still
+require current session/epoch/generation/announcement matching and cannot satisfy this barrier.
+
+Keep at most one pending cancellation receipt plus the last acknowledged receipt for idempotency.
+If another control action must extend a pending fence, issue a fresh cancellationId with the higher
+cutoff, supersede the old pending receipt and restart its five-second acknowledgment deadline. An
+old receipt cannot clear the newer barrier; return 410 and let the newer SSE cancel be acknowledged.
+Repeated acknowledgment of the latest completed receipt returns 204 without side effects. Missing
+acknowledgment after five seconds ends the session. Stop/disconnect ends the session and needs no
+acknowledgment to complete cleanup; it cannot offer new audio afterward.
+
+## Explicit latest-result recovery (U2)
+
+Retain a separate latestAcceptedDescription, even when its audio never started. Update it on accepted
+information and emit description.latest; use acceptance order, selecting the highest-priority item
+first for a batch and publishing that batch's highest-priority description as latest. It contains
+only <=500 characters and a fresh descriptionId; clear it on seek/source replacement/session end.
+
+After the user activates AudioContext, the labelled Read latest result control sends
+`{action:"recover",epoch,descriptionId}`. Reject mute, missing data or a superseded descriptionId with
+409 and a safe explanation. Recover clears the audio-blocked state and queues exactly that description
+as one intentional item (`origin:"recovery", isReplay:true`); repeated clicks for the same pending
+description coalesce. It may be read in reviewing state or after its track left view because the user
+explicitly requested the last recognised result. It does not restore an automatic backlog.
+
+Enable audio only enables future dispatch; it never silently replays old results. Repeat latest
+continues to mean the last description whose playback started (`origin:"repeat", isReplay:true`).
+Automatic items use `origin:"automatic", isReplay:false`. Recovery does not require a previous
+started announcement. If a cancellation barrier is outstanding, the explicit request waits for its
+acknowledgment before synthesis/offer; failure to clear the barrier ends the session as above.
+
+## Visual fallback boundary (U3)
+
+The API returns observation metadata, not preview-image bytes. The client can overlay locally retained
+camera/image frames or locally decodable video at matching timestamps. If local video decoding or
+synchronisation is unavailable, disable that video's overlay and provide text/audio review plus an
+accessible explanation. No server preview-frame endpoint or sampled-frame fallback is part of v1.
