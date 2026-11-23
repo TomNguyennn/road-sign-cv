@@ -3,6 +3,8 @@
 This is the intended runnable interface for the implementation phase. The repository currently
 has no application, Dockerfile, trained model, or test executables; the commands below are not
 claimed to work today. `$speckit-tasks` must turn each prerequisite into implementation work.
+The Azure/Terraform/GitHub Actions workflow below is also a planned deliverable, not a deployed
+pipeline. Local and cloud profiles share application contracts but use different TLS setup.
 
 ## Prerequisites and dataset/model preparation
 
@@ -62,6 +64,41 @@ Trust this certificate explicitly on the desktop and test phone using their OS/b
 settings. Visit `https://<DEMO_HOST>/`; bypassing a certificate warning is not a substitute for a
 trusted secure camera context. Keep phone and host on the permitted demo network. Do not publish
 this single-session prototype as an unrestricted internet service.
+
+## Azure deployment and GitHub Actions validation
+
+Use [azure-deployment.md](azure-deployment.md) for the required services, AZ-001–AZ-008 acceptance
+gates, Terraform layout, permissions, release manifest and rollback rules. These steps apply only
+after the infrastructure, workflows and real custom model have been implemented and validated.
+
+1. Supply Azure tenant/subscription, UK South quota or another recorded region, owned domain and
+   certificate, tester CIDRs, budget, alert recipients and GitHub environment protection. Confirm
+   the gateway/DDoS/NAT cost estimate before provisioning. No cloud credentials belong in the repo.
+2. Bootstrap the protected Azure Blob state/plan containers and OIDC trust; migrate and verify
+   bootstrap state. Pin Terraform/providers and use separate state keys per environment.
+3. Run `terraform fmt -check -recursive infra/terraform`, initialize each root and run
+   `terraform validate`; run infrastructure policy/redaction tests. Main-branch CI must also pass
+   native sanitizers, Python/TS/browser checks and Docker/Compose smoke tests. Fork PR checks must
+   have no cloud identity. Do not label missing real-model or physical-device evidence as passing.
+4. Generate a trusted Terraform plan. Review its exact SHA, state key, lock hash and cost/security
+   changes. Apply only that unexpired saved plan through protected infra-apply. On first setup,
+   create the stack with the gateway disabled, issue/import the Key Vault certificate, then review
+   and apply gateway enablement as documented in azure-deployment.md; do not reuse the local CA.
+5. Publish tested images/model artifacts to ACR by immutable digest. Dispatch protected deployment
+   with the validated release manifest. The VM pulls with managed identity and runs Compose with
+   `--no-build`; health and synthetic recognition checks gate reopening admission.
+6. Validate maximum/oversized uploads and retry after failure, 5-FPS frames, ten-minute SSE,
+   cancellation/recovery, phone camera/audio TLS, blocked direct-origin access, safe WAF/bot/rate
+   rejection and sanitized analytics. Verify DDoS configuration/alerts without attack traffic.
+7. Exercise certificate renewal, host reboot without swap, state locking/recovery and a deliberately
+   failed release followed by rollback. Record Azure end-to-end latency separately from native
+   inference results in `reports/validation/azure.md`.
+
+Deploy/rollback interrupts the active session and requires a fresh user start. It must not replay
+history or attempt to restore media. Preserve the previous successful image/model manifest until
+the next release is verified. Infrastructure rollback requires a new reviewed Terraform plan.
+Use a reviewed destroy plan for environment cleanup; retain state/recovery artifacts. Stopping the
+VM does not remove gateway, DDoS, NAT or storage charges, and budget alerts do not cap spending.
 
 Expected: `/api/v1/ready` reports ready, supported modes and limits are visible, no camera opens
 until Start, and a phone can access the same HTTPS origin. A missing bundle gives an accessible

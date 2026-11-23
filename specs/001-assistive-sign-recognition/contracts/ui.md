@@ -4,6 +4,10 @@
 
 One recognition page contains a heading, an explanation that media is processed by the demo host
 without persistent session storage, source selection, controls, status, and optional results.
+For the Azure profile, explain before capture/upload that processing occurs on the Azure-hosted
+demo, application media is ephemeral, and sanitized operational/security metrics are retained.
+Do not describe managed WAF processing as guaranteed RAM-only. Gateway access/rate failures need
+accessible next steps and safe handling of non-JSON errors, without automatic upload retries.
 No login, onboarding wizard, automatic camera access, or hidden keyboard shortcuts.
 
 Use native labelled controls in this order: input mode; file picker when applicable; Start;

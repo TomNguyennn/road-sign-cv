@@ -2,7 +2,8 @@
 
 Normative design for the C++ server and TypeScript client. All endpoints below are under `/api/v1`.
 JSON is UTF-8 with camelCase keys. Unknown fields are rejected. No account, database, WebSocket,
-cloud service or resumable session protocol is introduced.
+cloud OCR/TTS or resumable session protocol is introduced. Azure hosts the same C++ API under the
+security and proxy requirements in [azure-deployment.md](../azure-deployment.md).
 
 ## Origin, ownership and errors
 
@@ -19,6 +20,9 @@ Use 400 invalid request/sequence, 403 bad origin/CSRF, 404 not owned/not found, 
 410 expired epoch/resource (only for authenticated owners), 413 size limit, 415 unsupported format,
 422 invalid media/dimensions/duration, 429 frame capacity/rate, 503 model/runtime unavailable.
 Readiness checks expose no filesystem paths, raw media, text or stack traces.
+Azure gateway rejections may use a non-JSON body and 403/429 status outside this application error
+schema. The client must show an accessible bounded error without parsing arbitrary HTML as a result
+or automatically retrying uploads. WAF limits supplement, rather than replace, backend admission.
 
 ## Endpoints
 

@@ -8,7 +8,7 @@ description: "Dependency-ordered implementation tasks for the accessible sign re
 **Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md),
 [data-model.md](data-model.md), [API contract](contracts/api.md),
 [model contract](contracts/model-bundle.md), [UI contract](contracts/ui.md),
-and [quickstart.md](quickstart.md).
+[quickstart.md](quickstart.md), and [Azure delivery design](azure-deployment.md).
 
 **Tests**: Required by the specification's acceptance scenarios and constitution. Write the listed
 behavioral/contract tests before their implementation, demonstrate the expected failure, then make
@@ -17,7 +17,7 @@ must not become production fallback implementations. Checked tasks mean complete
 not merely drafted code. All tasks below are intentionally unchecked.
 
 **Organization**: Setup, common foundations, one phase per user story in specification order,
-then cross-cutting validation. No application implementation is performed by this task-generation
+then Azure delivery and cross-cutting validation. No application implementation is performed by this task-generation
 command. The user has requested frequent rollback commits: commit coherent changes after their
 relevant checks pass, stage explicit paths, and leave the constitution uncommitted.
 
@@ -225,16 +225,40 @@ artifacts/evidence; executable metric tooling alone does not complete the resear
 
 ---
 
-## Phase 7: Polish & Cross-Cutting Concerns
+## Phase 7: Azure, Terraform and GitHub Actions
+
+**Purpose**: Deliver the requested controlled Azure deployment with AZ-001–AZ-008 protections,
+reproducible infrastructure and a reviewed release/rollback path. No resources are provisioned by
+this planning update. Workflows must remain disabled for deployment until real prerequisites exist.
+
+- [ ] T083 Write infrastructure policy and synthetic privacy fixtures in `infra/tests/` covering private origin/no public SSH, WAF Prevention/bot/rate/DDoS settings, identity scope, no secrets in state inputs, log redaction, SSE buffers and upload limits; assert unsafe plans/fixtures fail before implementing resources.
+- [ ] T084 Implement Terraform backend bootstrap, runtime user-assigned identities and federated identities in `infra/terraform/bootstrap/` with private state/plan containers, Entra-only auth, locking/versioning/recovery, separate state keys, scoped plan/publish/apply/deploy identities and protected-environment trust; document authorised bootstrap/migration and test concurrent locking and recovery.
+- [ ] T085 Implement the environment root and network/compute resources in `infra/terraform/stack/` and non-secret inputs in `infra/terraform/environments/`; pin CLI/provider versions and locks, validate CIDRs/region/budgets, provide gateway/private VM subnets, platform-compatible NSGs, NAT egress and Ubuntu D4s_v5 without a public VM IP; pass T083 plan assertions.
+- [ ] T086 Add ACR, Key Vault and runtime/gateway identities in `infra/terraform/stack/identity.tf`; disable registry admin login, enforce vault RBAC/soft-delete/purge protection, scope pull/certificate permissions through constrained role delegation and reference certificate URIs without fetching values into Terraform; document certificate import/renewal prerequisites and test permission denial outside the intended scope.
+- [ ] T087 Implement Application Gateway WAF_v2, DNS integration and DDoS IP Protection in `infra/terraform/stack/edge.tf`; enforce tester CIDR blocking, CRS/bot rules, method/path rate limits, request/file-size limits, trusted origin TLS and disabled SSE response buffering; test allowed input boundaries and unsafe-plan rejection without weakening managed inspection; provide initial gateway-disabled provisioning until the external certificate is available, then require reviewed enablement for acceptance.
+- [ ] T088 Add Monitor/Log Analytics, VM data collection, Workbooks, alerts and budgets in `infra/terraform/stack/monitoring.tf`; scrub WAF fields and transform raw identifiers/matched data before retention, collect only sanitized application logs and prove canary removal with `infra/tests/` fixtures; do not export an unsanitized second copy.
+- [ ] T089 Implement secret-free VM setup in `infra/cloud-init/`, `compose.azure.yaml` and `config/Caddyfile.azure`; fetch certificates with managed identity into tmpfs, pull artifacts privately, retain non-root/read-only/resource restrictions, disable swap/core dumps across reboot and test origin TLS/rotation, admission and cleanup; add the cloud privacy notice and gateway-error tests in `frontend/src/modules/recognition-session/`.
+- [ ] T090 Implement `.github/workflows/ci.yml` and `.github/workflows/terraform-plan.yml`; require native/sanitizer/Python/TS/browser/Docker and Terraform checks, pin actions, deny fork cloud access, use trusted-ref OIDC plans with protected saved artifacts/checksums/expiry, and test workflow permissions and failure propagation. No absent check or required model evidence may silently pass.
+- [ ] T091 Implement `.github/workflows/publish.yml` after successful same-SHA CI; validate custom model/parity/licensing evidence, build/push immutable backend/web/model artifacts to ACR, record dependency/scan evidence and the release manifest specified in `azure-deployment.md`; test missing/mismatched digests/model/config and prevent publication of an unvalidated runnable release.
+- [ ] T092 Implement protected `.github/workflows/deploy.yml` and `scripts/deploy/` with separate infra-apply/app-deploy/rollback modes for exact reviewed-plan apply, managed-identity VM pulls, digest-pinned Compose deployment, serialized maintenance/health checks, explicit rollback and weekly read-only drift in terraform-plan.yml; test stale plans, failed initial deploy, failed health, successful previous-release restore and failed rollback with admission closed. Infrastructure rollback must use a new plan, not old state replacement.
+- [ ] T093 On an authorised Azure environment, execute AZ-001–AZ-008 and all cloud acceptance scenarios from `azure-deployment.md`, recording evidence in `reports/validation/azure.md`; include maximum uploads/retries, 5-FPS frames, ten-minute SSE, physical-phone HTTPS/audio, safe WAF/rate/bot checks, log canaries, reboot/rotation, alert delivery and deployment rollback. Do not generate DDoS traffic or claim unrun tests passed.
+- [ ] T094 Write exercised bootstrap/deployment/rollback/drift/renewal/incident/cost/teardown instructions in `docs/azure-operations.md`; record required GitHub protection settings, cloud privacy boundary, fixed running costs and surviving state/vault retention, and link actual AZ-001–AZ-008 evidence. Preserve the previous compatible release and bootstrap state during cleanup.
+
+**Checkpoint**: A validated, restricted Azure release and tested rollback exist. Missing subscription,
+certificate, real model, environment approval gates or cloud evidence leaves dependent tasks open.
+
+---
+
+## Phase 8: Polish & Cross-Cutting Concerns
 
 **Purpose**: Verify the complete prototype and its delivery instructions without expanding scope.
 
-- [ ] T083 [P] Add final lifecycle/privacy integration tests in `backend/tests/integration/SessionPrivacyTest.cpp` for stop during multipart spooling, nonce abuse/concurrent uploads, invalid cookies/CSRF, session replacement and container restart; inspect no-store responses, tmpfs cleanup, redacted logs and absence of user data in persistent mounts/browser storage.
-- [ ] T084 [P] Add cross-module cancellation stress tests in `backend/tests/integration/CancellationStressTest.cpp` for late inference/OCR/TTS callbacks, reordered control replies, disconnect during playback and repeated start/stop; exercise both sanitizers and verify no surviving session-owned buffers or detached workers.
-- [ ] T085 Run native builds/unit/contracts/integration, ASan+UBSan, separate TSan, Python checks, strict TS/lint, frontend tests and browser workflows, recording actual commands/results and any unsupported instrumentation in `reports/validation/final-checks.md`; fix failures in scoped files with regression tests and do not suppress checks to pass.
-- [ ] T086 Validate both Docker build targets, Compose startup/readiness, non-root/resource bounds, proxy admission and physical-phone HTTPS trust using `Dockerfile`, `compose.yaml`, and `config/Caddyfile`; record native dependency/model hashes, host swap state and any failed deployment checks in `reports/validation/deployment.md`.
-- [ ] T087 Update `README.md` and `specs/001-assistive-sign-recognition/quickstart.md` to the commands actually implemented and exercised; document dependency bootstrap, dataset/model acquisition, CA trust, privacy boundaries, measured limitations and cleanup without claiming unexecuted tests passed.
-- [ ] T088 Audit every requirement and evidence gate against the constitution in `reports/validation/completion.md`; verify no production stubs, runtime Python, private cross-module includes, unexpected persistence or scope additions, leave unfinished external-data/device/study tasks unchecked and commit coherent validated increments using explicit paths while leaving the constitution uncommitted.
+- [ ] T095 [P] Add final lifecycle/privacy integration tests in `backend/tests/integration/SessionPrivacyTest.cpp` for stop during multipart spooling, nonce abuse/concurrent uploads, invalid cookies/CSRF, session replacement and container restart; inspect no-store responses, tmpfs cleanup, redacted logs and absence of user data in persistent mounts/browser storage.
+- [ ] T096 [P] Add cross-module cancellation stress tests in `backend/tests/integration/CancellationStressTest.cpp` for late inference/OCR/TTS callbacks, reordered control replies, disconnect during playback and repeated start/stop; exercise both sanitizers and verify no surviving session-owned buffers or detached workers.
+- [ ] T097 Run native builds/unit/contracts/integration, ASan+UBSan, separate TSan, Python checks, strict TS/lint, frontend tests and browser workflows, recording actual commands/results and any unsupported instrumentation in `reports/validation/final-checks.md`; fix failures in scoped files with regression tests and do not suppress checks to pass.
+- [ ] T098 Validate both Docker build targets, Compose startup/readiness, non-root/resource bounds, proxy admission and physical-phone HTTPS trust using `Dockerfile`, `compose.yaml`, and `config/Caddyfile`; record native dependency/model hashes, host swap state and any failed deployment checks in `reports/validation/deployment.md`.
+- [ ] T099 Update `README.md` and `specs/001-assistive-sign-recognition/quickstart.md` to the commands actually implemented and exercised; document dependency bootstrap, dataset/model acquisition, CA trust, privacy boundaries, measured limitations and cleanup without claiming unexecuted tests passed.
+- [ ] T100 Audit every requirement and evidence gate against the constitution in `reports/validation/completion.md`; verify no production stubs, runtime Python, private cross-module includes, unexpected persistence or scope additions, leave unfinished external-data/device/study tasks unchecked and commit coherent validated increments using explicit paths while leaving the constitution uncommitted.
 
 ---
 
@@ -255,13 +279,21 @@ Setup T001–T008 -> Foundations T009–T020 -> US1 image slice T021–T044
                                       US4 T071–T082
                                              |
                                              v
-                                    Polish T083–T088
+                                    Azure T083–T094
+                                             |
+                                             v
+                                    Polish T095–T100
 ```
 
 The default execution is sequential by phase. Overlap is optional and restricted below; the graph
 does not imply all story implementations are independent. Each story has its own observable test,
 but full-stack US2 builds on the US1 image/native pipeline and completes its camera acceptance;
 full US3 validation needs US2 seek/continuous behavior.
+Cloud design/test authoring T083–T090 may start after foundations when explicitly scheduled; do
+not deploy before the relevant application/model/accessible-control checks pass. Phase 7's default
+position does not prevent earlier CI adoption. T087 requires the T086 certificate prerequisite;
+T091 waits for successful same-SHA CI and real-model evidence, T092 consumes its manifest, and
+T093 requires an authorised environment. Absent external evidence never becomes a green check.
 
 ### User Story Dependencies
 
@@ -275,7 +307,9 @@ full US3 validation needs US2 seek/continuous behavior.
 - **US4**: Offline metric unit tests and study preparation can start after foundations and catalogue
   definition; actual evaluation requires the trained model, continuous pipeline and accessible
   prototype. Reports/visual review integrate after US3 in the default sequence.
-- **Polish**: Requires all implemented stories; completeness cannot be claimed while dataset,
+- **Azure**: Reuses the Docker/API/UI contracts and requires their validated implementation for
+  live deployment. Security/infra tests precede resources; delivery tests precede cloud acceptance.
+- **Polish**: Requires all implemented stories and Azure delivery; completeness cannot be claimed while dataset,
   participant, native-host or device evidence remains unavailable.
 
 ### Within Each User Story
@@ -301,7 +335,7 @@ full US3 validation needs US2 seek/continuous behavior.
 | US2 policy/video test design | US1 image slice complete | T045, T046, T047 |
 | US3 controls/test design | US2 complete | T059, T060, T061 |
 | US4 review/metrics test design | US3 complete | T071, T072 |
-| Cross-cutting integration tests | US4 complete | T083, T084 |
+| Cross-cutting integration tests | US4 and Azure delivery complete | T095, T096 |
 
 Do not run tasks sharing configuration, composition roots or controllers in parallel merely because
 they belong to different stories. Test implementation can wait for a missing dependency, but its
@@ -345,20 +379,26 @@ once their actual input/model/device prerequisites are present.
 | FR-009 accessibility | T024, T043, T061, T065–T070 |
 | FR-010 optional results/history | T071, T073–T075 |
 | FR-011 input/connection errors | T015–T020, T021, T030, T039–T042, T061, T066–T067 |
-| FR-012 cancellation | T013–T016, T037–T042, T047, T053, T056, T059–T067, T084 |
-| FR-013 one-session demo | T009, T013, T015, T020, T068, T083 |
-| FR-014 privacy | T001, T010, T014–T020, T027, T067, T076, T078, T083 |
+| FR-012 cancellation | T013–T016, T037–T042, T047, T053, T056, T059–T067, T096 |
+| FR-013 one-session demo | T009, T013, T015, T020, T068, T095 |
+| FR-014 privacy | T001, T010, T014–T020, T027, T067, T076, T078, T095 |
 | FR-015 training/provenance | T004–T005, T022, T025–T029, T032–T033 |
 | FR-016 evaluation | T072, T076–T082 |
-| FR-017 no inferred navigation | T025, T035, T044, T088 |
+| FR-017 no inferred navigation | T025, T035, T044, T100 |
 | SC-001 reference scenarios | T044, T058, T070, T082 |
 | SC-002 accessible tasks | T061, T068–T070 |
-| SC-003 repeats/overlap/stop | T046, T056–T060, T064, T078–T079, T084 |
+| SC-003 repeats/overlap/stop | T046, T056–T060, T064, T078–T079, T096 |
 | SC-004, SC-005, SC-006 detection/OCR/tracking scores | T072, T076–T079 |
 | SC-007 runtime performance | T057, T078, T080 |
 | SC-008 intended-user study | T081 |
 | SC-009 robustness breakdown | T027, T072, T077, T079 |
-| SC-010 lifecycle/privacy | T009–T010, T067, T073–T075, T083 |
+| SC-010 lifecycle/privacy | T009–T010, T067, T073–T075, T095 |
+| AZ-001 WAF, AZ-002 rate limits, AZ-003 bot protection | T083, T087, T089, T093 |
+| AZ-004 secrets and managed/federated identities | T084, T086, T089–T093 |
+| AZ-005 logs and analytics | T083, T088, T093–T094 |
+| AZ-006 DDoS protection | T083, T087–T088, T093 |
+| AZ-007 Terraform | T083–T090, T092–T094 |
+| AZ-008 GitHub Actions CI/CD and rollback | T090–T094 |
 
 ## Implementation Strategy
 
@@ -377,7 +417,8 @@ retain the data/training/real-recognition tasks as incomplete; do not downgrade 
 3. US2 completes camera acceptance and adds video, stable identities, text consensus and bounded announcements.
 4. US3 completes accessible control/recovery and real-device evidence.
 5. US4 adds optional review and actual research outcomes.
-6. Final validation exercises packaging, memory safety, isolation and documented run instructions.
+6. Azure delivery adds Terraform, required security/analytics and GitHub Actions with tested rollback.
+7. Final validation exercises packaging, memory safety, isolation and documented run instructions.
 
 ### Parallel Team Strategy
 

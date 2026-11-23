@@ -10,6 +10,10 @@ Build a single C++ modular-monolith backend and an accessible TypeScript browser
 camera frames or upload images/videos; the backend performs detection, tracking, OCR, consolidation,
 and speech synthesis. The browser plays generated speech and exposes optional visual results.
 Use CPU inference as the reproducible baseline; record measured research results, not promised FPS.
+Deploy the controlled Azure demo behind Application Gateway WAF on a private VM running Docker
+Compose. Terraform owns infrastructure; GitHub Actions owns validation, immutable publishing and
+protected deployment/rollback. [azure-deployment.md](azure-deployment.md) defines the service
+inventory, WAF/bot/rate/DDoS controls, secrets, analytics and delivery contracts.
 
 The repository currently contains documentation and Spec Kit scaffolding, not application code,
 models, datasets, or build infrastructure. This command creates design documents only. Commands in
@@ -28,11 +32,15 @@ Vitest/Testing Library, Playwright and axe-core. Release families are design bas
 of installed versions. Implementation must resolve supported patches within these families,
 commit immutable source hashes/package locks/image digests, and record the tested manifest.
 No floating latest dependencies in a reproducible build.
+Terraform CLI/AzureRM provider and GitHub Actions must also use tested pinned versions/commit SHAs;
+commit provider locks during implementation. Azure authentication uses federated/managed identities.
 
 **Storage**: No database or accounts. Session state and audio in memory; uploaded video and request
 spools on bounded tmpfs. Authorised research media/model bundles are explicit read-only mounts;
 evaluation outputs are written only by an offline evaluation command. No ordinary demo media,
 recognised text, audio, or history is persisted.
+Azure Blob stores protected Terraform state/plans; ACR stores images and authorised model artifacts.
+Sanitized operational telemetry goes to Log Analytics. These stores must never receive session media.
 
 **Testing**: GoogleTest/CTest for domain, native integration and contracts; ASan/UBSan and a separate
 TSan build; pytest for dataset/export checks; Vitest for client state; Playwright/axe for workflows;
@@ -41,6 +49,8 @@ manual desktop and phone screen-reader tests and five-participant study. No appl
 **Target Platform**: Linux amd64 CPU deployment, 4 CPU cores and 8 GiB host RAM as reference minimum;
 backend container budget 4 GiB including a 256 MiB tmpfs. Docker Desktop may run the same amd64
 image for development; emulated results must be labelled and not used as the native benchmark.
+Azure starts with a private Ubuntu 24.04 Standard_D4s_v5 VM (4 vCPU/16 GiB), UK South subject to
+quota, behind WAF_v2 with DDoS IP Protection; keep the same container limits and singleton session.
 Browser acceptance: Chrome and Firefox desktop with NVDA/Windows, Safari/macOS with VoiceOver,
 Safari/iPhone with VoiceOver, Chrome/Android with TalkBack. Test current stable versions at each
 release and record exact versions; no background-tab capture or unsupported-browser guarantee.
@@ -55,6 +65,9 @@ queues growing without limit; correctness is tested separately from recognition 
 **Constraints**: Eight catalogue categories; English; no runtime Python; no cloud OCR/TTS;
 no retained session media; session-exclusive access; trusted HTTPS for phone camera. Stop and
 mute cancel browser audio immediately and fence late worker results before publication.
+Azure access is restricted to configured tester CIDRs. Application-controlled storage must stay
+ephemeral; the UI must disclose cloud processing and avoid promising RAM-only handling inside
+Azure's managed WAF. No persistent raw request/body/session telemetry may be configured.
 
 **Scale/Scope**: One active session, three input modes, custom training, research evaluation;
 no embedded systems, navigation, crossing decisions, accounts, or public multi-user deployment.
@@ -87,13 +100,14 @@ specs/001-assistive-sign-recognition/
   research.md
   data-model.md
   quickstart.md
+  azure-deployment.md
   checklists/requirements.md
   contracts/api.md
   contracts/model-bundle.md
   contracts/ui.md
 ```
 
-`tasks.md` is present and is synchronized for the explicitly requested dependency corrections.
+`tasks.md` is present and synchronized for the dependency corrections and Azure/Terraform/CI work.
 The image-only US1 checkpoint precedes US2; full US1 camera acceptance occurs with US2 after
 tracking and temporal consensus exist. Provenance capture follows package-lock resolution.
 
@@ -128,8 +142,14 @@ resources/                    # catalogue and non-user test fixtures
 models/                       # ignored, checksum-verified model bundles
 research-data/                # ignored, authorised offline datasets only
 reports/                      # ignored, offline evaluation outputs
+infra/terraform/              # bootstrap and one parameterized Azure environment stack
+infra/cloud-init/             # host setup without secret values
+infra/tests/                  # infrastructure policy and redaction tests
+scripts/deploy/               # manifest validation, Compose switch and rollback
+.github/workflows/            # CI, Terraform plan, publish and protected deploy
 Dockerfile
 compose.yaml
+compose.azure.yaml
 CMakeLists.txt
 CMakePresets.json
 ```
@@ -143,6 +163,9 @@ Frontend features follow the same domain-first rule, with PascalCase component f
 
 **Structure Decision**: One C++ deployment unit with internal domain libraries. Caddy serves the
 frontend and proxies API traffic, not a second business-logic service. Training is offline tooling.
+Cloud resources protect and operate these same containers; they do not split domain modules into
+services. The Azure profile uses public trusted certificates and private origin access; the local
+profile retains the internal-CA workflow.
 
 ## Execution Design
 
@@ -177,7 +200,10 @@ frontend and proxies API traffic, not a second business-logic service. Training 
    from measured model accuracy.
 4. Complete Docker HTTPS, phone access, upload/spool cleanup, memory bounds, sanitizers, API
    ownership tests, keyboard/screen-reader flows, and end-to-end reference fixtures.
-5. Run held-out evaluation, ten-minute native performance assessment, and the participant study.
+5. Add Terraform state/bootstrap, private Azure networking/VM, WAF/rate/bot/DDoS controls, managed
+   identity/Key Vault and sanitized Monitor analytics. Add GitHub Actions CI, reviewed plans,
+   immutable ACR publishing and protected deployment with tested rollback; no deployment in planning.
+6. Run held-out evaluation, ten-minute native performance assessment, and the participant study.
    Report incomplete evidence explicitly; no benchmark score is assumed from library selection.
 
 Detailed validation and requirement coverage are in quickstart.md. Future task generation must
@@ -185,8 +211,10 @@ keep tests alongside every behavioral change and include model/data preparation 
 
 ## Complexity Tracking
 
-No violations or added distributed infrastructure. Native library adapters and two worker queues
-are necessary to satisfy C++ ownership, responsive controls, and blocking third-party APIs.
+No constitution violations. Native library adapters and two worker queues satisfy C++ ownership,
+responsive controls and blocking third-party APIs. Azure adds the explicitly requested security
+and operations infrastructure while preserving a single application deployment unit. No cluster,
+message broker, database or distributed domain service is introduced.
 
 ## Analysis Remediation Decisions
 

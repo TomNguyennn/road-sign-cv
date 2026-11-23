@@ -198,3 +198,26 @@ not a placeholder or a fixed successful-upload count.
 **Alternatives considered**: Reusing playback acknowledgments leaves ambiguous generation fencing;
 automatic replay restores stale queues; server-preview images add transport/storage obligations;
 moving all tracking into foundations unnecessarily blocks the initial image milestone.
+
+## Azure, Terraform and GitHub Actions
+
+**Decision**: Application Gateway WAF_v2 with managed/bot rules, path-specific rate limits and
+DDoS IP Protection fronts a private Ubuntu VM running the existing Docker Compose application.
+Use ACR, Key Vault/managed identities, explicit NAT egress, sanitized Monitor/Log Analytics and
+budget alerts. Terraform owns infrastructure and protected Blob state; GitHub Actions uses OIDC
+for reviewed plans, tested immutable releases and protected deployment/rollback.
+
+**Rationale**: This retains the measured native CPU/container environment and session ownership
+model while meeting the requested cloud security and delivery controls. Explicit response-buffer
+configuration preserves SSE. Multipart upload limits must be tested separately from WAF inspection
+depth. Application tmpfs guarantees cannot be extended to managed WAF internals. Cloud deployments
+interrupt sessions; application rollback restores a compatible release, never an audio backlog.
+
+**Alternatives considered**: AKS and separate module services add orchestration without a scaling
+requirement; managed container platforms change the host/swap verification boundary; Front Door
+adds another proxy not needed for this regional controlled demo. Bicep is excluded by the user's
+Terraform choice. Static Azure credentials and mutable image tags weaken delivery provenance.
+
+Detailed decisions, current primary-source references, service inventory, editable policies,
+release fields and test gates are in [azure-deployment.md](azure-deployment.md). Optional Azure
+services are distinguished from the required baseline; no cloud resources were created.
