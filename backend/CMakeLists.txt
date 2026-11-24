@@ -33,3 +33,24 @@ target_include_directories(runtime-foundation-test PRIVATE "${CMAKE_SOURCE_DIR}/
 target_link_libraries(runtime-foundation-test PRIVATE GTest::gtest_main)
 target_compile_options(runtime-foundation-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME runtime-foundation COMMAND runtime-foundation-test)
+
+add_library(recognition-session STATIC
+    modules/recognition-session/application/SessionService.cpp
+    modules/recognition-session/infrastructure/SessionExecutor.cpp)
+target_include_directories(recognition-session PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/modules/recognition-session/application"
+    "${CMAKE_CURRENT_SOURCE_DIR}/modules/recognition-session/domain")
+target_link_libraries(recognition-session PRIVATE uuid)
+target_compile_options(recognition-session PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_executable(session-foundation-test
+    modules/recognition-session/tests/SessionFoundationTest.cpp)
+target_link_libraries(session-foundation-test PRIVATE recognition-session GTest::gtest_main)
+target_compile_options(session-foundation-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME session-foundation COMMAND session-foundation-test)
+
+add_executable(session-executor-test
+    modules/recognition-session/tests/SessionExecutorTest.cpp)
+target_link_libraries(session-executor-test PRIVATE recognition-session GTest::gtest_main)
+target_compile_options(session-executor-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME session-executor COMMAND session-executor-test)

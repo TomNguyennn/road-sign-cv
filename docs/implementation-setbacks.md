@@ -12,6 +12,8 @@ This log records issues that changed the implementation or delayed validation. I
 - **Stale bind-mounted source:** The running container exposed a truncated `backend/shared/Frame.hpp` despite the intact host file. Copying the host file into `/workspace` restored matching SHA-256 hashes; the public-header syntax check and ARM64 CTest passed 6/6 afterward.
 - **Offline npm audit:** The local audit command could not reach `registry.npmjs.org`. CI retains the audit step; local audit status is therefore unverified.
 - **CI branch trigger:** CI initially ran only on pull requests and pushes to `main`. The feature branch `001-assistive-sign-recognition` was added to the push trigger so its pushes run CI.
+- **Stale container source recurred:** Later edits again did not appear in the container bind view. Explicit `docker cp` synchronization was needed before ARM64 compilation; the final 8-test suite passed after syncing. Keep checking host/container hashes before treating a container build as evidence for current host files.
+- **Executor compile issues:** The first bounded-worker build exposed a wrong shared-header include path and an invalid default construction of an immutable `Frame`. The include root was corrected, the work item became optional, and the ARM64 suite passed 8/8.
 
 ## Current validation boundary
 
