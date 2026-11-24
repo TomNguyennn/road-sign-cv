@@ -7,4 +7,8 @@ if (!rootElement) {
   throw new Error("Application root element is missing");
 }
 
-createRoot(rootElement).render(<StrictMode><App /></StrictMode>);
+createRoot(rootElement).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);

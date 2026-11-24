@@ -90,3 +90,12 @@ not an apt repository snapshot or a completed deployment Dockerfile:
 Preserve Ubuntu package copyright files during container packaging. Docker/Caddy,
 Terraform/provider locks and GitHub action SHAs are recorded when their respective
 tasks introduce those dependencies; no untested versions are represented here.
+
+## Formatting and static analysis
+
+C++ formatting and clang-tidy checks use Ubuntu LLVM 18.1.3 in the native ARM64
+build container. Record these tool versions in the container image provenance when
+the reproducible toolchain image is added. CMake source files are not passed to
+clang-format; C++ sources and headers use `.clang-format`. Frontend formatting uses
+the locked Prettier version; Python uses the Ruff formatter in the hash-locked
+training environment.

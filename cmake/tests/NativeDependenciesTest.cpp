@@ -9,11 +9,23 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
+#include <cstdint>
 #include <regex>
 #include <vector>
 
+namespace {
+constexpr int IMAGE_ROWS = 2;
+constexpr int IMAGE_COLUMNS = 3;
+constexpr int PIXEL_VALUE = 10;
+constexpr int PIXEL_VALUE_SECOND = 20;
+constexpr int PIXEL_VALUE_THIRD = 30;
+constexpr int TRACKER_FRAME_RATE = 30;
+constexpr int TRACKER_BUFFER_LENGTH = 30;
+} // namespace
+
 TEST(NativeDependencies, ImageCodecsAndVideoBackendAreAvailable) {
-    const cv::Mat image{2, 3, CV_8UC3, cv::Scalar{10, 20, 30}};
+    const cv::Mat image{IMAGE_ROWS, IMAGE_COLUMNS, CV_8UC3,
+                        cv::Scalar{PIXEL_VALUE, PIXEL_VALUE_SECOND, PIXEL_VALUE_THIRD}};
     std::vector<unsigned char> encoded;
     ASSERT_TRUE(cv::imencode(".png", image, encoded));
     const auto decoded = cv::imdecode(encoded, cv::IMREAD_COLOR);
@@ -31,6 +43,6 @@ TEST(NativeDependencies, NativeOcrSpeechHttpAndTrackerLibrariesLoad) {
     auto response = drogon::HttpResponse::newHttpResponse();
     response->setStatusCode(drogon::k202Accepted);
     EXPECT_EQ(response->statusCode(), drogon::k202Accepted);
-    BYTETracker tracker{30, 30};
+    BYTETracker tracker{TRACKER_FRAME_RATE, TRACKER_BUFFER_LENGTH};
     EXPECT_TRUE(tracker.update({}).empty());
 }

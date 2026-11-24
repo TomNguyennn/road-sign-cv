@@ -17,6 +17,7 @@ uv pip sync training/requirements.lock --python training/.venv/bin/python --requ
 uv build training --python training/.venv/bin/python --out-dir build/training
 uv pip install --python training/.venv/bin/python --no-deps build/training/road_sign_training-0.1.0-py3-none-any.whl
 training/.venv/bin/ruff check training/road_sign_training
+training/.venv/bin/ruff format --check training/road_sign_training
 training/.venv/bin/mypy training/road_sign_training
 ```
 

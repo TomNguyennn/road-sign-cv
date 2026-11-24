@@ -7,7 +7,9 @@ afterEach(cleanup);
 
 test("identifies the prototype and does not offer unavailable recognition controls", () => {
   render(<App />);
-  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Assistive sign recognition");
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+    "Assistive sign recognition",
+  );
   expect(screen.getByText("Recognition is not yet available.")).toBeTruthy();
   expect(screen.queryByRole("button")).toBeNull();
 });
