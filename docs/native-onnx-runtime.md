@@ -6,7 +6,8 @@ is needed by the application. See the [official installation guide](https://onnx
 
 `cmake/OnnxRuntime.cmake` downloads version **1.22.0** over verified TLS and checks
 SHA-256 `d571e63a2329baacb713f441e65ad75284de354db6e1ac435fe4bebbb417986a`
-before extraction. It imports the matching headers and Linux amd64 CPU library.
+before extraction. It imports matching headers and selects the Linux amd64 or arm64
+CPU library from the same package according to the CMake target processor.
 This hash pins the inspected package bytes; it is not a claim of independent
 publisher-signature verification or a security audit of this version.
 
@@ -37,8 +38,10 @@ ctest --test-dir build/onnx-smoke --output-on-failure
 The check verifies native loading, exact runtime version, C++ environment creation
 and a CPU tensor round trip. It requires no model, Python or .NET. First configure
 needs access to `api.nuget.org`; later builds reuse CMake's downloaded content.
-The module deliberately rejects macOS/ARM64 builds; use an amd64 Linux container
-on an Apple Silicon development host. Emulated runs are not performance evidence.
+The module rejects native macOS builds. On Apple Silicon, use a native Linux
+ARM64 container and the `*-arm64` root presets. Copied ONNX libraries are separated
+by architecture even when the extracted package cache is shared. Emulated runs
+are not performance evidence.
 
 This completes only the ONNX Runtime dependency integration within T002. Other
 native dependencies, full build presets, real-model inference/parity, sanitizers

@@ -50,8 +50,9 @@ TSan build; pytest for dataset/export checks; Vitest for client state; Playwrigh
 manual desktop and phone screen-reader tests and five-participant study. No application tests have run yet; document validation is reported separately.
 
 **Target Platform**: Linux amd64 CPU deployment, 4 CPU cores and 8 GiB host RAM as reference minimum;
-backend container budget 4 GiB including a 256 MiB tmpfs. Docker Desktop may run the same amd64
-image for development; emulated results must be labelled and not used as the native benchmark.
+backend container budget 4 GiB including a 256 MiB tmpfs. Apple Silicon development uses native
+Linux arm64 containers with separate dependency/build directories; amd64 deployment checks run
+on native amd64 runners. Emulated results must be labelled and not used as the native benchmark.
 Azure starts with a private Ubuntu 24.04 Standard_D4s_v5 VM (4 vCPU/16 GiB), UK South subject to
 quota, behind WAF_v2 with DDoS IP Protection; keep the same container limits and singleton session.
 Browser acceptance: Chrome and Firefox desktop with NVDA/Windows, Safari/macOS with VoiceOver,

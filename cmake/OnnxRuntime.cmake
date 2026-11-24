@@ -1,9 +1,9 @@
 include_guard(GLOBAL)
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
-   NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$" OR
+   NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|aarch64|arm64)$" OR
    NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-    message(FATAL_ERROR "The pinned ONNX Runtime package targets Linux amd64; use the Linux amd64 Docker toolchain.")
+    message(FATAL_ERROR "Use a 64-bit Linux amd64 or arm64 toolchain for ONNX Runtime.")
 endif()
 
 include(FetchContent)
@@ -17,8 +17,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(onnxruntime)
 
-set(ONNX_RUNTIME_NATIVE_DIR "${onnxruntime_SOURCE_DIR}/runtimes/linux-x64/native")
-set(ONNX_RUNTIME_LIBRARY_DIR "${onnxruntime_BINARY_DIR}/lib")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+    set(ONNX_RUNTIME_ARCH arm64)
+else()
+    set(ONNX_RUNTIME_ARCH x64)
+endif()
+set(ONNX_RUNTIME_NATIVE_DIR "${onnxruntime_SOURCE_DIR}/runtimes/linux-${ONNX_RUNTIME_ARCH}/native")
+set(ONNX_RUNTIME_LIBRARY_DIR "${onnxruntime_BINARY_DIR}/lib/${ONNX_RUNTIME_ARCH}")
 file(MAKE_DIRECTORY "${ONNX_RUNTIME_LIBRARY_DIR}")
 # NuGet omits the filename matching the ELF SONAME needed by the Linux loader.
 configure_file("${ONNX_RUNTIME_NATIVE_DIR}/libonnxruntime.so"
