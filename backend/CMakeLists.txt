@@ -27,3 +27,9 @@ set(ROAD_SIGN_MODULE_DEPENDENCIES
 if(ROAD_SIGN_MODULE_DEPENDENCIES)
     target_link_libraries(road-sign-backend INTERFACE ${ROAD_SIGN_MODULE_DEPENDENCIES})
 endif()
+
+add_executable(runtime-foundation-test tests/integration/RuntimeFoundationTest.cpp)
+target_include_directories(runtime-foundation-test PRIVATE "${CMAKE_SOURCE_DIR}/backend")
+target_link_libraries(runtime-foundation-test PRIVATE GTest::gtest_main)
+target_compile_options(runtime-foundation-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME runtime-foundation COMMAND runtime-foundation-test)
