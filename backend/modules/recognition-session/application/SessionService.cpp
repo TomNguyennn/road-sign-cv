@@ -14,6 +14,7 @@ namespace {
 constexpr auto kHeartbeatLease = std::chrono::seconds{15};
 constexpr auto kEventAttachWindow = std::chrono::seconds{10};
 constexpr auto kUploadAdmissionLifetime = std::chrono::seconds{65};
+constexpr std::size_t kMaxPendingUploadEvents = 32;
 
 bool isUuid(std::string_view value) {
     if (value.size() != 36 || value[8] != '-' || value[13] != '-' ||
@@ -73,6 +74,7 @@ CreateResult SessionService::create(SourceKind sourceKind, std::string_view orig
     session.eventAttachDeadline = now + kEventAttachWindow;
     session.heartbeatDeadline = now + kHeartbeatLease;
     active_ = session;
+    uploadEvents_.clear();
     return {CreateResult::Status::created, session};
 }
 
@@ -87,6 +89,15 @@ bool SessionService::attachEvents(std::string_view sessionId,
     ++active_->stateRevision;
     active_->heartbeatDeadline = now + kHeartbeatLease;
     return true;
+}
+
+void SessionService::expireUnattached(std::chrono::steady_clock::time_point now) {
+    std::lock_guard lock(mutex_);
+    if (!active_ || active_->eventsAttached || now <= active_->eventAttachDeadline)
+        return;
+    active_->state = State::ended;
+    active_.reset();
+    uploadEvents_.clear();
 }
 
 bool SessionService::authenticateLocked(std::string_view sessionId,
@@ -132,6 +143,7 @@ bool SessionService::completeCleanup(std::string_view sessionId) {
     active_->state = State::ended;
     ++active_->stateRevision;
     active_.reset();
+    uploadEvents_.clear();
     return true;
 }
 
@@ -143,6 +155,7 @@ void SessionService::shutdown() noexcept {
     active_->state = State::ended;
     ++active_->stateRevision;
     active_.reset();
+    uploadEvents_.clear();
 }
 
 bool SessionService::acceptsCallback(std::string_view sessionId, std::uint32_t epoch,
@@ -202,6 +215,7 @@ UploadAdmissionResult SessionService::admitUpload(
     active_->uploadAdmissionNonce = nonce;
     active_->uploadAdmissionDeadline = now + kUploadAdmissionLifetime;
     ++active_->stateRevision;
+    queueUploadEventLocked();
     return {UploadAdmissionResult::Status::admitted, std::move(nonce), active_};
 }
 
@@ -218,6 +232,7 @@ bool SessionService::setUploadValidating(std::string_view sessionId,
         return false;
     active_->uploadReceipt.status = UploadStatus::validating;
     ++active_->stateRevision;
+    queueUploadEventLocked();
     return true;
 }
 
@@ -234,6 +249,7 @@ std::optional<std::string> SessionService::expireUploadAdmission(
     active_->state = State::ending;
     active_->endingSince = now;
     ++active_->stateRevision;
+    queueUploadEventLocked();
     return active_->sessionId;
 }
 
@@ -255,7 +271,31 @@ bool SessionService::finishUpload(std::string_view sessionId,
     active_->uploadAdmissionNonce.reset();
     active_->uploadAdmissionDeadline.reset();
     ++active_->stateRevision;
+    queueUploadEventLocked();
     return true;
+}
+
+void SessionService::queueUploadEventLocked() {
+    if (uploadEvents_.size() >= kMaxPendingUploadEvents) {
+        active_->state = State::ending;
+        ++active_->stateRevision;
+        return;
+    }
+    uploadEvents_.push_back({active_->epoch, active_->stateRevision, active_->uploadReceipt,
+        active_->uploadAttemptsUsed, active_->maxUploadAttempts, active_->hasAcceptedUpload,
+        active_->canAdmitUpload()});
+}
+
+std::vector<UploadEventSnapshot> SessionService::drainUploadEvents(std::string_view sessionId) {
+    std::lock_guard lock(mutex_);
+    if (!active_ || active_->sessionId != sessionId) return {};
+    std::vector<UploadEventSnapshot> events;
+    events.reserve(uploadEvents_.size());
+    while (!uploadEvents_.empty()) {
+        events.push_back(std::move(uploadEvents_.front()));
+        uploadEvents_.pop_front();
+    }
+    return events;
 }
 
 std::optional<Entity> SessionService::snapshot() const {

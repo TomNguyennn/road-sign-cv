@@ -65,6 +65,18 @@ TEST(SessionFoundationTest, AllowsEventAttachmentUntilTenSecondDeadline) {
     EXPECT_TRUE(service.attachEvents(session.sessionId, now + std::chrono::seconds{9}));
 }
 
+TEST(SessionFoundationTest, UnattachedSessionExpiresAndReleasesLease) {
+    SessionService service{3, "https://demo.example"};
+    const auto now = std::chrono::steady_clock::now();
+    const auto session = service.create(SourceKind::image, "https://demo.example", now).session.value();
+    service.expireUnattached(now + std::chrono::seconds{9});
+    ASSERT_TRUE(service.snapshot());
+    service.expireUnattached(now + std::chrono::seconds{11});
+    EXPECT_FALSE(service.snapshot());
+    EXPECT_FALSE(service.attachEvents(session.sessionId, now + std::chrono::seconds{10}));
+    EXPECT_TRUE(service.create(SourceKind::camera, "https://demo.example", now).session);
+}
+
 TEST(SessionFoundationTest, RejectsLateCallbacksAfterEndBegins) {
     SessionService service{3, "https://demo.example"};
     const auto now = std::chrono::steady_clock::now();
@@ -132,6 +144,15 @@ TEST(SessionFoundationTest, AdmissionBindsOwnerEpochNonceAndRetryBudget) {
     EXPECT_FALSE(state.hasAcceptedUpload);
     EXPECT_EQ(state.uploadReceipt.status, UploadStatus::rejected);
     EXPECT_GT(state.stateRevision, createdRevision);
+    const auto firstEvents = service.drainUploadEvents(session.sessionId);
+    ASSERT_EQ(firstEvents.size(), 3);
+    EXPECT_EQ(firstEvents[0].receipt.status, UploadStatus::receiving);
+    EXPECT_EQ(firstEvents[1].receipt.status, UploadStatus::validating);
+    EXPECT_EQ(firstEvents[2].receipt.status, UploadStatus::rejected);
+    EXPECT_LT(firstEvents[0].stateRevision, firstEvents[1].stateRevision);
+    EXPECT_LT(firstEvents[1].stateRevision, firstEvents[2].stateRevision);
+    EXPECT_TRUE(firstEvents[2].canRetryUpload);
+    EXPECT_TRUE(service.drainUploadEvents(session.sessionId).empty());
     auto second = service.admitUpload(session.sessionId, session.csrfToken, "https://demo.example",
                                       1, std::string{secondId}, now + std::chrono::seconds{1});
     ASSERT_EQ(second.status, UploadAdmissionResult::Status::admitted);
@@ -180,5 +201,34 @@ TEST(SessionFoundationTest, AdmissionRejectionsDoNotIncrementUploadAttempts) {
         "d37f3719-c17a-4c7c-9a3d-8441d4f42722", now).status,
         UploadAdmissionResult::Status::exhausted);
     EXPECT_EQ(service.snapshot()->uploadAttemptsUsed, 1);
+}
+
+TEST(SessionFoundationTest, FailedUploadsExhaustFiniteBudgetButUnlimitedBudgetKeepsRetrying) {
+    constexpr std::string_view attemptIds[] = {
+        "edc6258a-a013-467e-ace1-865af6048911",
+        "d37f3719-c17a-4c7c-9a3d-8441d4f42722",
+        "a4f9ad68-f9e5-49dd-b411-6441a4d50955",
+    };
+    const auto now = std::chrono::steady_clock::now();
+    for (const auto maxAttempts : {0U, 2U}) {
+        SessionService service{maxAttempts, "https://demo.example"};
+        const auto session = service.create(SourceKind::image, "https://demo.example", now).session.value();
+        ASSERT_TRUE(service.attachEvents(session.sessionId, now));
+        for (std::size_t index = 0; index < 2; ++index) {
+            auto admission = service.admitUpload(session.sessionId, session.csrfToken,
+                "https://demo.example", 1, std::string{attemptIds[index]}, now);
+            ASSERT_EQ(admission.status, UploadAdmissionResult::Status::admitted);
+            ASSERT_TRUE(admission.nonce);
+            ASSERT_TRUE(service.setUploadValidating(session.sessionId, attemptIds[index],
+                *admission.nonce, now));
+            ASSERT_TRUE(service.finishUpload(session.sessionId, attemptIds[index], false,
+                "INVALID_MEDIA"));
+        }
+        const auto next = service.admitUpload(session.sessionId, session.csrfToken,
+            "https://demo.example", 1, std::string{attemptIds[2]}, now);
+        EXPECT_EQ(next.status, maxAttempts == 0 ? UploadAdmissionResult::Status::admitted
+                                                 : UploadAdmissionResult::Status::exhausted);
+        EXPECT_EQ(service.snapshot()->uploadAttemptsUsed, maxAttempts == 0 ? 3U : 2U);
+    }
 }
 } // namespace RoadSign::RecognitionSession

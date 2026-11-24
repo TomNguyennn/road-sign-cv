@@ -178,6 +178,25 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
                         loop->invalidateTimer(*timerId);
                         return;
                     }
+                    for (const auto& upload : sessions.drainUploadEvents(id)) {
+                        Entity eventState = *current;
+                        eventState.epoch = upload.epoch;
+                        eventState.stateRevision = upload.stateRevision;
+                        eventState.uploadReceipt = upload.receipt;
+                        eventState.uploadAttemptsUsed = upload.uploadAttemptsUsed;
+                        eventState.maxUploadAttempts = upload.maxUploadAttempts;
+                        eventState.hasAcceptedUpload = upload.hasAcceptedUpload;
+                        auto payload = uploadPayload(eventState);
+                        payload["canRetryUpload"] = upload.canRetryUpload;
+                        if (!sendEvent(streamOwner, id, eventState, *eventSeq,
+                                       "upload.state", std::move(payload))) {
+                            static_cast<void>(sessions.beginEnd(id, csrf, origin, now));
+                            static_cast<void>(sessions.completeCleanup(id));
+                            streamOwner->close();
+                            loop->invalidateTimer(*timerId);
+                            return;
+                        }
+                    }
                     const bool stateChanged = current->stateRevision != previous->stateRevision &&
                         (current->epoch != previous->epoch || current->state != previous->state ||
                          current->audioGeneration != previous->audioGeneration ||
@@ -195,18 +214,6 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
                             loop->invalidateTimer(*timerId);
                             return;
                         }
-                    }
-                    const bool uploadChanged = current->uploadReceipt.uploadAttemptId !=
-                            previous->uploadReceipt.uploadAttemptId ||
-                        current->uploadReceipt.status != previous->uploadReceipt.status ||
-                        current->uploadReceipt.errorCode != previous->uploadReceipt.errorCode;
-                    if (uploadChanged && !sendEvent(streamOwner, id, *current, *eventSeq,
-                            "upload.state", uploadPayload(*current))) {
-                        static_cast<void>(sessions.beginEnd(id, csrf, origin, now));
-                        static_cast<void>(sessions.completeCleanup(id));
-                        streamOwner->close();
-                        loop->invalidateTimer(*timerId);
-                        return;
                     }
                     *previous = *current;
                     ++(*timerTick);

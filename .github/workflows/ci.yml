@@ -142,6 +142,14 @@ jobs:
           csrf = session["csrfToken"]
           cookie = next(item.value for item in cookie_jar if item.name == "rs_session")
           assert len(cookie) == 64 and cookie != session_id and cookie != csrf
+          other_client = urllib.request.build_opener(
+              urllib.request.HTTPSHandler(context=ssl._create_unverified_context()))
+          try:
+              other_client.open(base + f"/sessions/{session_id}/upload-status", timeout=10)
+          except urllib.error.HTTPError as error:
+              assert error.code == 404
+          else:
+              raise AssertionError("another client read the upload receipt")
 
           events = request(f"/sessions/{session_id}/events", headers={"Accept": "text/event-stream"}, include_origin=False)
           assert events.readline().strip() == b"event: session.ready"
@@ -168,7 +176,10 @@ jobs:
               assert error.code == 422
           else:
               raise AssertionError("invalid image was accepted")
+          first_receiving = read_upload_event("receiving")
+          first_validating = read_upload_event("validating")
           rejected = read_upload_event("rejected")
+          assert first_receiving["stateRevision"] < first_validating["stateRevision"] < rejected["stateRevision"]
           assert rejected["payload"]["uploadAttemptsUsed"] == 1
           assert rejected["payload"]["canRetryUpload"] is True
           try:
@@ -181,7 +192,10 @@ jobs:
           accepted = upload(f"/sessions/{session_id}/media", second_attempt, tiny_png())
           assert accepted.status == 202
           assert json.loads(accepted.read())["uploadStatus"] == "accepted"
+          second_receiving = read_upload_event("receiving")
+          second_validating = read_upload_event("validating")
           accepted_event = read_upload_event("accepted")
+          assert second_receiving["stateRevision"] < second_validating["stateRevision"] < accepted_event["stateRevision"]
           assert accepted_event["eventSeq"] > rejected["eventSeq"]
           assert accepted_event["payload"]["uploadAttemptsUsed"] == 2
           status = request(f"/sessions/{session_id}/upload-status", include_origin=False)
@@ -203,6 +217,17 @@ jobs:
               assert error.code == 404
           else:
               raise AssertionError("ended session remained accessible")
+
+          unattached = request("/sessions", "POST", {"sourceKind": "image"})
+          assert unattached.status == 201
+          unattached_id = json.loads(unattached.read())["sessionId"]
+          time.sleep(12)
+          replacement = request("/sessions", "POST", {"sourceKind": "image"})
+          assert replacement.status == 201
+          replacement_session = json.loads(replacement.read())
+          assert replacement_session["sessionId"] != unattached_id
+          assert request(f"/sessions/{replacement_session['sessionId']}", "DELETE",
+                         headers={"X-CSRF-Token": replacement_session["csrfToken"]}).status == 202
           PY
       - name: Check health and missing-model readiness
         run: |

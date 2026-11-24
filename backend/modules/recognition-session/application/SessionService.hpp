@@ -3,10 +3,12 @@
 #include "../domain/RecognitionSession.hpp"
 
 #include <chrono>
+#include <deque>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace RoadSign::RecognitionSession {
 struct CreateResult {
@@ -23,6 +25,16 @@ struct UploadAdmissionResult {
     std::optional<Entity> snapshot;
 };
 
+struct UploadEventSnapshot {
+    std::uint32_t epoch;
+    std::uint64_t stateRevision;
+    UploadReceipt receipt;
+    std::uint32_t uploadAttemptsUsed;
+    std::uint32_t maxUploadAttempts;
+    bool hasAcceptedUpload;
+    bool canRetryUpload;
+};
+
 class SessionService {
 public:
     explicit SessionService(std::uint32_t maxUploadAttempts, std::string trustedOrigin);
@@ -31,6 +43,7 @@ public:
                                       std::chrono::steady_clock::time_point now);
     [[nodiscard]] bool attachEvents(std::string_view sessionId,
                                     std::chrono::steady_clock::time_point now);
+    void expireUnattached(std::chrono::steady_clock::time_point now);
     [[nodiscard]] bool authenticate(std::string_view sessionId, std::string_view csrfToken,
                                     std::string_view origin) const;
     [[nodiscard]] bool heartbeat(std::string_view sessionId, std::string_view csrfToken,
@@ -60,6 +73,7 @@ public:
     [[nodiscard]] std::optional<std::string> expireUploadAdmission(
         std::chrono::steady_clock::time_point now);
     [[nodiscard]] std::optional<Entity> snapshot() const;
+    [[nodiscard]] std::vector<UploadEventSnapshot> drainUploadEvents(std::string_view sessionId);
 
 private:
     [[nodiscard]] static std::string randomUuid();
@@ -67,10 +81,12 @@ private:
     [[nodiscard]] bool authenticateLocked(std::string_view sessionId,
                                           std::string_view csrfToken,
                                           std::string_view origin) const;
+    void queueUploadEventLocked();
 
     const std::uint32_t maxUploadAttempts_;
     const std::string trustedOrigin_;
     mutable std::mutex mutex_;
     std::optional<Entity> active_;
+    std::deque<UploadEventSnapshot> uploadEvents_;
 };
 } // namespace RoadSign::RecognitionSession

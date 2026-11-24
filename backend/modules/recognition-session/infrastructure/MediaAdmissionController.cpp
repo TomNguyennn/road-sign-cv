@@ -277,7 +277,11 @@ std::optional<MediaProcessing::MediaSource> validateVideo(
 std::shared_ptr<const MediaProcessing::OwnedTemporaryFile> saveTemporaryMedia(
     const drogon::HttpFile& file, std::string_view suffix) {
     const auto path = std::filesystem::path{kMediaDirectory} / (uuid() + std::string{suffix});
-    if (file.saveAs(path.string()) != 0) return {};
+    if (file.saveAs(path.string()) != 0) {
+        std::error_code error;
+        std::filesystem::remove(path, error);
+        return {};
+    }
     return std::make_shared<MediaProcessing::OwnedTemporaryFile>(path);
 }
 

@@ -50,6 +50,9 @@ int main() {
     drogon::app().loadConfigJson(std::move(drogonConfig));
     RecognitionSession::registerSessionRoutes(drogon::app(), sessions, *config);
     RecognitionSession::registerMediaAdmissionRoutes(drogon::app(), sessions, *config);
+    drogon::app().getLoop()->runEvery(1.0, [&sessions] {
+        sessions.expireUnattached(std::chrono::steady_clock::now());
+    });
     const auto port = parsePort(std::getenv("PORT"));
     if (!port) {
         Infrastructure::logEvent(Infrastructure::Event::runtimeUnavailable);
