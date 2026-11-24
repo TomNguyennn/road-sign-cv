@@ -23,12 +23,21 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: 0.9.10
       - run: uv python install 3.12
       - run: uv venv training/.venv --python 3.12 && uv pip sync training/requirements.lock --python training/.venv/bin/python --require-hashes
-      - run: training/.venv/bin/ruff check training && training/.venv/bin/mypy training
+      - run: training/.venv/bin/ruff check training && training/.venv/bin/ruff format --check training && training/.venv/bin/mypy training
+      - name: Report deferred suites and release status
+        run: |
+          {
+            echo '### Deferred checks'
+            echo '- Backend lifecycle/integration contracts: pending T009/T010 and backend implementation.'
+            echo '- Playwright accessibility workflows: pending T024.'
+            echo '- Python model/evaluation tests: pending T022.'
+            echo '- Release eligible: **false** until the full planned validation and real-model gate pass.'
+          } >> "$GITHUB_STEP_SUMMARY"
   native:
     runs-on: ubuntu-24.04-arm
     steps:
