@@ -52,14 +52,25 @@ jobs:
       - run: docker build --target backend-runtime -t road-sign-backend:ci .
       - run: docker build --target web-runtime -t road-sign-web:ci .
       - run: docker compose --env-file config/demo.env.example build && docker compose --env-file config/demo.env.example up -d
+      - name: Wait for local HTTPS liveness
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail --insecure https://localhost:8443/api/v1/health; then exit 0; fi
+            sleep 2
+          done
+          exit 1
       - name: Check session lifecycle, event stream, and upload snapshot
         run: |
           python3 - <<'PY'
           import http.cookiejar
           import json
+          import socket
+          import struct
           import ssl
+          import time
           import urllib.error
           import urllib.request
+          import zlib
 
           base = "https://localhost:8443/api/v1"
           opener = urllib.request.build_opener(
@@ -75,9 +86,54 @@ jobs:
               if data is not None:
                   request_headers["Content-Type"] = "application/json"
               return opener.open(urllib.request.Request(
-                  base + path, data=data, headers=request_headers, method=method, timeout=10
-              ))
+                  base + path, data=data, headers=request_headers, method=method
+              ), timeout=10)
 
+          def png_chunk(kind, data):
+              chunk = kind + data
+              return struct.pack(">I", len(data)) + chunk + struct.pack(">I", zlib.crc32(chunk))
+
+          def tiny_png():
+              return (b"\x89PNG\r\n\x1a\n" + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+                      + png_chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00")) + png_chunk(b"IEND", b""))
+
+          def upload(path, attempt_id, content):
+              boundary = "road-sign-ci-boundary"
+              body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sign.png\"\r\n"
+                      "Content-Type: image/png\r\n\r\n").encode() + content + f"\r\n--{boundary}--\r\n".encode()
+              headers = {"Origin": "https://localhost", "X-CSRF-Token": csrf,
+                         "X-Epoch": "1", "X-Upload-Attempt-Id": attempt_id,
+                         "Content-Type": f"multipart/form-data; boundary={boundary}"}
+              return opener.open(urllib.request.Request(
+                  base + path, data=body, headers=headers, method="POST"
+              ), timeout=10)
+
+          def read_upload_event(expected_status):
+              deadline = time.monotonic() + 10
+              while True:
+                  remaining = deadline - time.monotonic()
+                  if remaining <= 0:
+                      raise AssertionError(f"timed out waiting for upload.state {expected_status}")
+                  events.fp.raw._sock.settimeout(remaining)
+                  try:
+                      lines = []
+                      while line := events.readline().strip():
+                          lines.append(line)
+                  except socket.timeout as error:
+                      raise AssertionError(f"timed out waiting for upload.state {expected_status}") from error
+                  event = next((line for line in lines if line.startswith(b"event: ")), b"")
+                  data = next((line[6:] for line in lines if line.startswith(b"data: ")), b"")
+                  if event == b"event: upload.state" and data:
+                      envelope = json.loads(data)
+                      if envelope["payload"]["uploadStatus"] == expected_status:
+                          return envelope
+
+          try:
+              request("/sessions", "POST", {"sourceKind": "image", "unexpected": True})
+          except urllib.error.HTTPError as error:
+              assert error.code == 400
+          else:
+              raise AssertionError("unknown session fields were accepted")
           created = request("/sessions", "POST", {"sourceKind": "image"})
           assert created.status == 201
           session = json.loads(created.read())
@@ -86,7 +142,14 @@ jobs:
 
           events = request(f"/sessions/{session_id}/events", headers={"Accept": "text/event-stream"})
           assert events.readline().strip() == b"event: session.ready"
-          assert events.readline().startswith(b"data: {")
+          ready_envelope = json.loads(events.readline()[6:])
+          assert ready_envelope["type"] == "session.ready" and ready_envelope["eventSeq"] == 1
+          try:
+              request(f"/sessions/{session_id}/events", headers={"Accept": "text/event-stream"})
+          except urllib.error.HTTPError as error:
+              assert error.code == 409
+          else:
+              raise AssertionError("second event stream attachment was accepted")
 
           heartbeat = request(
               f"/sessions/{session_id}/heartbeat", "POST", {"epoch": 1},
@@ -95,8 +158,40 @@ jobs:
           assert heartbeat.status == 204
           status = request(f"/sessions/{session_id}/upload-status")
           assert json.loads(status.read())["uploadStatus"] == "idle"
+          first_attempt = "edc6258a-a013-467e-ace1-865af6048911"
+          try:
+              upload(f"/sessions/{session_id}/media", first_attempt, b"invalid image").close()
+          except urllib.error.HTTPError as error:
+              assert error.code == 422
+          else:
+              raise AssertionError("invalid image was accepted")
+          rejected = read_upload_event("rejected")
+          assert rejected["payload"]["uploadAttemptsUsed"] == 1
+          assert rejected["payload"]["canRetryUpload"] is True
+          try:
+              upload(f"/sessions/{session_id}/media", first_attempt, b"invalid image").close()
+          except urllib.error.HTTPError as error:
+              assert error.code == 409
+          else:
+              raise AssertionError("duplicate upload attempt was accepted")
+          second_attempt = "d37f3719-c17a-4c7c-9a3d-8441d4f42722"
+          accepted = upload(f"/sessions/{session_id}/media", second_attempt, tiny_png())
+          assert accepted.status == 202
+          assert json.loads(accepted.read())["uploadStatus"] == "accepted"
+          accepted_event = read_upload_event("accepted")
+          assert accepted_event["eventSeq"] > rejected["eventSeq"]
+          assert accepted_event["payload"]["uploadAttemptsUsed"] == 2
+          status = request(f"/sessions/{session_id}/upload-status")
+          assert json.loads(status.read())["uploadStatus"] == "accepted"
           ended = request(f"/sessions/{session_id}", "DELETE", headers={"X-CSRF-Token": csrf})
           assert ended.status == 202
+          assert json.loads(ended.read())["stateRevision"] >= session["stateRevision"]
+          while True:
+              lines = []
+              while line := events.readline().strip():
+                  lines.append(line)
+              if b"event: session.ended" in lines:
+                  break
           events.close()
 
           try:
@@ -108,10 +203,6 @@ jobs:
           PY
       - name: Check health and missing-model readiness
         run: |
-          for attempt in $(seq 1 30); do
-            if curl --silent --fail --insecure https://localhost:8443/api/v1/health; then break; fi
-            sleep 2
-          done
           curl --silent --fail --insecure https://localhost:8443/api/v1/capabilities
           code=$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure https://localhost:8443/api/v1/ready)
           test "$code" = 503

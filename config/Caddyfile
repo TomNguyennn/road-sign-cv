@@ -1,3 +1,11 @@
+{
+    servers {
+        timeouts {
+            read_body 60s
+        }
+    }
+}
+
 {$DEMO_HOST:localhost} {
     tls internal
     root * /srv
@@ -6,8 +14,25 @@
         max_size 101MB
     }
     @private path /internal/* /api/v1/internal/*
+    @duplicateSessionCookie header_regexp Cookie (?i)(^|;[[:blank:]]*)rs_session=[^;]*(;[^;]*)*;[[:blank:]]*rs_session=
+    respond @duplicateSessionCookie "invalid session cookie" 400
     handle @private {
         respond "not found" 404
+    }
+    @media path_regexp media ^/api/v1/sessions/([^/]+)/media$
+    handle @media {
+        route {
+            request_header -X-Upload-Admission-Nonce
+            forward_auth backend:8080 {
+                uri /internal/admit-media
+                header_up X-Forwarded-Method {method}
+                header_up X-Forwarded-Uri {uri}
+                copy_headers X-Upload-Admission-Nonce
+            }
+            reverse_proxy backend:8080 {
+                flush_interval -1
+            }
+        }
     }
     @api path /api/v1/*
     handle @api {

@@ -1,6 +1,7 @@
 #include "infrastructure/Logger.hpp"
 #include "infrastructure/RuntimeConfig.hpp"
 #include "modules/recognition-session/application/SessionService.hpp"
+#include "modules/recognition-session/infrastructure/MediaAdmissionController.hpp"
 #include "modules/recognition-session/infrastructure/SessionController.hpp"
 
 #include <drogon/drogon.h>
@@ -48,6 +49,7 @@ int main() {
     drogonConfig["app"]["client_max_memory_body_size"] = kMaxInMemoryBodySize.data();
     drogon::app().loadConfigJson(std::move(drogonConfig));
     RecognitionSession::registerSessionRoutes(drogon::app(), sessions, *config);
+    RecognitionSession::registerMediaAdmissionRoutes(drogon::app(), sessions, *config);
     const auto port = parsePort(std::getenv("PORT"));
     if (!port) {
         Infrastructure::logEvent(Infrastructure::Event::runtimeUnavailable);

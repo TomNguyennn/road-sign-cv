@@ -14,6 +14,15 @@ struct CreateResult {
     std::optional<Entity> session;
 };
 
+struct UploadAdmissionResult {
+    enum class Status {
+        admitted, missing, forbidden, invalidAttempt, wrongSource, staleEpoch,
+        duplicateAttempt, sourceAccepted, exhausted, busy
+    } status;
+    std::optional<std::string> nonce;
+    std::optional<Entity> snapshot;
+};
+
 class SessionService {
 public:
     explicit SessionService(std::uint32_t maxUploadAttempts, std::string trustedOrigin);
@@ -36,12 +45,20 @@ public:
                                        std::uint32_t audioGeneration) const;
     [[nodiscard]] bool beginProcessing(std::string_view sessionId);
     [[nodiscard]] bool finishStillImage(std::string_view sessionId);
-    [[nodiscard]] bool beginUpload(std::string_view sessionId, std::string uploadAttemptId);
+    [[nodiscard]] UploadAdmissionResult admitUpload(
+        std::string_view sessionId, std::string_view csrfToken, std::string_view origin,
+        std::uint32_t epoch, std::string uploadAttemptId,
+        std::chrono::steady_clock::time_point now);
     [[nodiscard]] bool setUploadValidating(std::string_view sessionId,
-                                           std::string_view uploadAttemptId);
+                                           std::string_view uploadAttemptId,
+                                           std::string_view admissionNonce,
+                                           std::chrono::steady_clock::time_point now);
     [[nodiscard]] bool finishUpload(std::string_view sessionId,
                                     std::string_view uploadAttemptId, bool accepted,
-                                    std::optional<std::string> safeErrorCode = std::nullopt);
+                                    std::optional<std::string> safeErrorCode = std::nullopt,
+                                    std::optional<MediaProcessing::MediaSource> media = std::nullopt);
+    [[nodiscard]] std::optional<std::string> expireUploadAdmission(
+        std::chrono::steady_clock::time_point now);
     [[nodiscard]] std::optional<Entity> snapshot() const;
 
 private:

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UploadReceipt.hpp"
+#include "../../media-processing/public/MediaSource.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -26,6 +27,7 @@ struct Entity {
     std::uint32_t maxUploadAttempts{};
     bool hasAcceptedUpload{};
     UploadReceipt uploadReceipt;
+    std::optional<MediaProcessing::MediaSource> acceptedMedia;
     std::optional<std::string> uploadAdmissionNonce;
     std::optional<std::chrono::steady_clock::time_point> uploadAdmissionDeadline;
     bool eventsAttached{};

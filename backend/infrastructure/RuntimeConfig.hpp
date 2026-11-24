@@ -22,6 +22,7 @@ struct RuntimeConfig {
     std::uint32_t maxVideoHeight{1080};
     std::uint32_t maxVideoFramesPerSecond{60};
     std::uint32_t maxRequestBodyBytes{105'906'176};
+    std::uint32_t spoolMemoryBytes{10'485'760};
     std::uint32_t sessionTmpfsBytes{268'435'456};
 
     [[nodiscard]] static std::optional<RuntimeConfig> fromEnvironment();

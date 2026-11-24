@@ -1,4 +1,5 @@
 #include "SessionController.hpp"
+#include "SessionEventsController.hpp"
 
 #include <drogon/HttpResponse.h>
 
@@ -61,12 +62,6 @@ Json::Value uploadSnapshot(const Entity& session) {
     return body;
 }
 
-std::string serializeEvent(const Json::Value& envelope) {
-    Json::StreamWriterBuilder writer;
-    writer["indentation"] = "";
-    return "event: " + envelope["type"].asString() + "\ndata: " +
-           Json::writeString(writer, envelope) + "\n\n";
-}
 } // namespace
 
 void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
@@ -177,13 +172,15 @@ void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
                 body["message"] = "Session is already ending"; body["retryable"] = false;
                 callback(jsonResponse(std::move(body), k409Conflict)); return;
             }
-            Json::Value body;
-            body["state"] = "ending"; body["stateRevision"] = Json::UInt64{*stateRevision};
-            if (!sessions.completeCleanup(id)) {
+            const auto ending = sessions.snapshot();
+            if (!ending || ending->sessionId != id ||
+                (!ending->eventsAttached && !sessions.completeCleanup(id))) {
                 Json::Value error; error["code"] = "STATE_CONFLICT";
                 error["message"] = "Session cleanup did not complete"; error["retryable"] = true;
                 callback(jsonResponse(std::move(error), k503ServiceUnavailable)); return;
             }
+            Json::Value body;
+            body["state"] = "ending"; body["stateRevision"] = Json::UInt64{*stateRevision};
             auto response = jsonResponse(std::move(body), k202Accepted);
             response->addHeader("Set-Cookie", "rs_session=; Path=/api/v1; Secure; HttpOnly; SameSite=Strict; Max-Age=0");
             callback(response); return;
@@ -223,7 +220,10 @@ void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
             body["message"] = "Request authentication failed"; body["retryable"] = false;
             callback(jsonResponse(std::move(body), k403Forbidden)); return;
         }
-        callback(jsonResponse(Json::Value{}, k204NoContent));
+        auto response = HttpResponse::newHttpResponse();
+        response->setStatusCode(k204NoContent);
+        response->addHeader("Cache-Control", "no-store");
+        callback(response);
     }, {Post});
 
     app.registerHandler("/api/v1/sessions/{1}/upload-status", [&sessions, &config](
@@ -251,90 +251,6 @@ void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
         callback(jsonResponse(uploadSnapshot(*session)));
     }, {Get});
 
-    app.registerHandler("/api/v1/sessions/{1}/events", [&sessions, &config](
-        const HttpRequestPtr& request, std::function<void(const HttpResponsePtr&)>&& callback,
-        const std::string& id) {
-        const auto origin = request->getHeader("origin");
-        if (origin != config.trustedOrigin) {
-            Json::Value body; body["code"] = "FORBIDDEN";
-            body["message"] = "Request origin is not allowed"; body["retryable"] = false;
-            callback(jsonResponse(std::move(body), k403Forbidden)); return;
-        }
-        const auto session = sessions.snapshot();
-        const auto cookie = cookieValue(request);
-        if (!cookie || *cookie != id || !session || session->sessionId != id) {
-            Json::Value body; body["code"] = "NOT_FOUND";
-            body["message"] = "Session was not found"; body["retryable"] = false;
-            callback(jsonResponse(std::move(body), k404NotFound)); return;
-        }
-        if (!sessions.attachEvents(id, std::chrono::steady_clock::now())) {
-            Json::Value body; body["code"] = "STATE_CONFLICT";
-            body["message"] = "Event stream cannot be attached"; body["retryable"] = false;
-            callback(jsonResponse(std::move(body), k409Conflict)); return;
-        }
-        const auto attached = sessions.snapshot();
-        if (!attached || attached->sessionId != id) {
-            Json::Value body; body["code"] = "NOT_FOUND";
-            body["message"] = "Session was not found"; body["retryable"] = false;
-            callback(jsonResponse(std::move(body), k404NotFound)); return;
-        }
-        Json::Value envelope; envelope["sessionId"] = session->sessionId;
-        envelope["epoch"] = attached->epoch;
-        envelope["stateRevision"] = Json::UInt64{attached->stateRevision};
-        envelope["eventSeq"] = Json::UInt64{1}; envelope["type"] = "session.ready";
-        envelope["payload"]["state"] = "awaitingInput";
-        envelope["payload"]["audioGeneration"] = attached->audioGeneration;
-        auto readyEvent = serializeEvent(envelope);
-        auto response = HttpResponse::newAsyncStreamResponse(
-            [&sessions, id, csrf = attached->csrfToken, origin = config.trustedOrigin,
-             readyEvent = std::move(readyEvent)](ResponseStreamPtr stream) {
-                auto streamOwner = std::shared_ptr<ResponseStream>{std::move(stream)};
-                if (!streamOwner->send(readyEvent)) {
-                    streamOwner->close();
-                    return;
-                }
-                auto eventSeq = std::make_shared<std::uint64_t>(1);
-                auto timerTick = std::make_shared<std::uint32_t>(0);
-                auto timerId = std::make_shared<trantor::TimerId>();
-                auto* loop = drogon::app().getLoop();
-                *timerId = loop->runEvery(1.0, [&sessions, id, csrf, origin, streamOwner,
-                                                eventSeq, timerTick, timerId, loop] {
-                    const auto current = sessions.snapshot();
-                    if (!current || current->sessionId != id ||
-                        current->state == State::ending || current->state == State::ended) {
-                        streamOwner->close();
-                        loop->invalidateTimer(*timerId);
-                        return;
-                    }
-                    const auto now = std::chrono::steady_clock::now();
-                    ++(*timerTick);
-                    const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        current->heartbeatDeadline - now).count();
-                    if (remaining > 0 && *timerTick % 5 != 0) return;
-                    Json::Value heartbeat; heartbeat["sessionId"] = id;
-                    heartbeat["epoch"] = current->epoch;
-                    heartbeat["stateRevision"] = Json::UInt64{current->stateRevision};
-                    heartbeat["eventSeq"] = Json::UInt64{++(*eventSeq)};
-                    heartbeat["type"] = "heartbeat";
-                    if (remaining <= 0) {
-                        heartbeat["type"] = "session.ended";
-                        heartbeat["payload"]["reason"] = "leaseExpired";
-                    } else {
-                        heartbeat["payload"]["leaseRemainingMs"] = Json::Int64{remaining};
-                    }
-                    const auto event = serializeEvent(heartbeat);
-                    const bool sent = streamOwner->send(event);
-                    if (remaining <= 0 || !sent) {
-                        static_cast<void>(sessions.beginEnd(id, csrf, origin, now));
-                        static_cast<void>(sessions.completeCleanup(id));
-                        streamOwner->close();
-                        loop->invalidateTimer(*timerId);
-                    }
-                });
-            });
-        response->setStatusCode(k200OK); response->addHeader("Cache-Control", "no-store");
-        response->addHeader("Content-Type", "text/event-stream; charset=utf-8");
-        callback(response);
-    }, {Get});
+    registerSessionEventRoutes(app, sessions, config);
 }
 } // namespace RoadSign::RecognitionSession

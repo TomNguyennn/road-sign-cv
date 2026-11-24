@@ -90,6 +90,7 @@ TEST(RuntimeFoundationTest, PolicyAcceptsConfiguredDefaultsAndRejectsEnlargedHar
                   "maxHeight":1080,"maxFramesPerSecond":60},
         "upload":{"maxAttempts":3},
         "runtime":{"metricsEnabled":false,"maxRequestBodyBytes":105906176,
+                    "spoolMemoryBytes":10485760,
                     "sessionTmpfsBytes":268435456}
     })";
     const auto config = Infrastructure::RuntimeConfig::fromPolicyJson(validPolicy);
@@ -114,6 +115,12 @@ TEST(RuntimeFoundationTest, PolicyAcceptsConfiguredDefaultsAndRejectsEnlargedHar
         EXPECT_FALSE(Infrastructure::RuntimeConfig::fromPolicyJson(oversized))
             << "accepted an enlarged hard limit " << limitValue;
     }
+    auto oversizedMemorySpool = std::string{validPolicy};
+    const auto memorySpool = oversizedMemorySpool.find("\"spoolMemoryBytes\":10485760");
+    ASSERT_NE(memorySpool, std::string::npos);
+    oversizedMemorySpool.replace(memorySpool, std::string_view{"\"spoolMemoryBytes\":10485760"}.size(),
+                                 "\"spoolMemoryBytes\":10485761");
+    EXPECT_FALSE(Infrastructure::RuntimeConfig::fromPolicyJson(oversizedMemorySpool));
     auto invalidAttemptLimit = std::string{validPolicy};
     const auto attempts = invalidAttemptLimit.find("\"maxAttempts\":3");
     ASSERT_NE(attempts, std::string::npos);

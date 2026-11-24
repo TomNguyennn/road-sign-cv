@@ -43,12 +43,14 @@ add_test(NAME runtime-foundation COMMAND runtime-foundation-test)
 add_library(recognition-session STATIC
     modules/recognition-session/application/SessionService.cpp
     modules/recognition-session/infrastructure/SessionExecutor.cpp
-    modules/recognition-session/infrastructure/SessionController.cpp)
+    modules/recognition-session/infrastructure/SessionController.cpp
+    modules/recognition-session/infrastructure/MediaAdmissionController.cpp
+    modules/recognition-session/infrastructure/SessionEventsController.cpp)
 target_include_directories(recognition-session PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/modules/recognition-session/application"
     "${CMAKE_CURRENT_SOURCE_DIR}/modules/recognition-session/domain")
-target_link_libraries(recognition-session PRIVATE uuid PUBLIC Drogon::Drogon)
+target_link_libraries(recognition-session PRIVATE uuid opencv_imgcodecs opencv_videoio PUBLIC Drogon::Drogon)
 target_compile_options(recognition-session PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_executable(session-foundation-test
     modules/recognition-session/tests/SessionFoundationTest.cpp)

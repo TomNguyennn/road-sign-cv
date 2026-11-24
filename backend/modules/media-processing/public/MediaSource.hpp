@@ -1,11 +1,22 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <filesystem>
 #include <optional>
+#include <system_error>
 
 namespace RoadSign::MediaProcessing {
 enum class SourceKind { camera, image, video };
+
+struct OwnedTemporaryFile {
+    std::filesystem::path path;
+
+    ~OwnedTemporaryFile() {
+        std::error_code error;
+        std::filesystem::remove(path, error);
+    }
+};
 
 struct MediaSource {
     SourceKind kind;
@@ -13,6 +24,6 @@ struct MediaSource {
     std::uint32_t height;
     std::optional<std::uint64_t> durationMs;
     std::optional<std::uint64_t> positionMs;
-    std::filesystem::path ownedTemporaryFile;
+    std::shared_ptr<const OwnedTemporaryFile> ownedTemporaryFile;
 };
 } // namespace RoadSign::MediaProcessing

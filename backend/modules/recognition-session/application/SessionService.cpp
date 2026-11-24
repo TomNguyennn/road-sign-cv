@@ -3,12 +3,24 @@
 #include <uuid/uuid.h>
 
 #include <algorithm>
+#include <cctype>
 #include <stdexcept>
 
 namespace RoadSign::RecognitionSession {
 namespace {
 constexpr auto kHeartbeatLease = std::chrono::seconds{15};
 constexpr auto kEventAttachWindow = std::chrono::seconds{10};
+constexpr auto kUploadAdmissionLifetime = std::chrono::seconds{65};
+
+bool isUuid(std::string_view value) {
+    if (value.size() != 36 || value[8] != '-' || value[13] != '-' ||
+        value[18] != '-' || value[23] != '-') return false;
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        if (index == 8 || index == 13 || index == 18 || index == 23) continue;
+        if (!std::isxdigit(static_cast<unsigned char>(value[index]))) return false;
+    }
+    return true;
+}
 
 } // namespace
 
@@ -136,41 +148,87 @@ bool SessionService::finishStillImage(std::string_view sessionId) {
     return true;
 }
 
-bool SessionService::beginUpload(std::string_view sessionId, std::string uploadAttemptId) {
+UploadAdmissionResult SessionService::admitUpload(
+    std::string_view sessionId, std::string_view csrfToken, std::string_view origin,
+    std::uint32_t epoch, std::string uploadAttemptId,
+    std::chrono::steady_clock::time_point now) {
     std::lock_guard lock(mutex_);
-    if (!active_ || active_->sessionId != sessionId || !active_->canAdmitUpload() ||
-        uploadAttemptId.empty())
-        return false;
+    if (!active_ || active_->sessionId != sessionId)
+        return {UploadAdmissionResult::Status::missing, std::nullopt, std::nullopt};
+    if (!authenticateLocked(sessionId, csrfToken, origin))
+        return {UploadAdmissionResult::Status::forbidden, std::nullopt, std::nullopt};
+    if (active_->sourceKind == SourceKind::camera)
+        return {UploadAdmissionResult::Status::wrongSource, std::nullopt, active_};
+    if (active_->epoch != epoch)
+        return {UploadAdmissionResult::Status::staleEpoch, std::nullopt, active_};
+    if (!isUuid(uploadAttemptId))
+        return {UploadAdmissionResult::Status::invalidAttempt, std::nullopt, active_};
+    if (active_->uploadReceipt.uploadAttemptId == uploadAttemptId)
+        return {UploadAdmissionResult::Status::duplicateAttempt, std::nullopt, active_};
+    if (active_->hasAcceptedUpload)
+        return {UploadAdmissionResult::Status::sourceAccepted, std::nullopt, active_};
+    if (active_->maxUploadAttempts > 0 &&
+        active_->uploadAttemptsUsed >= active_->maxUploadAttempts)
+        return {UploadAdmissionResult::Status::exhausted, std::nullopt, active_};
+    if (!active_->canAdmitUpload())
+        return {UploadAdmissionResult::Status::busy, std::nullopt, active_};
+
+    auto nonce = randomUuid();
     ++active_->uploadAttemptsUsed;
     active_->uploadReceipt = {std::move(uploadAttemptId), UploadStatus::receiving, std::nullopt};
+    active_->uploadAdmissionNonce = nonce;
+    active_->uploadAdmissionDeadline = now + kUploadAdmissionLifetime;
     ++active_->stateRevision;
-    return true;
+    return {UploadAdmissionResult::Status::admitted, std::move(nonce), active_};
 }
 
 bool SessionService::setUploadValidating(std::string_view sessionId,
-                                         std::string_view uploadAttemptId) {
+                                         std::string_view uploadAttemptId,
+                                         std::string_view admissionNonce,
+                                         std::chrono::steady_clock::time_point now) {
     std::lock_guard lock(mutex_);
     if (!active_ || active_->sessionId != sessionId ||
         active_->uploadReceipt.uploadAttemptId != uploadAttemptId ||
-        active_->uploadReceipt.status != UploadStatus::receiving)
+        active_->uploadReceipt.status != UploadStatus::receiving ||
+        !active_->uploadAdmissionNonce || *active_->uploadAdmissionNonce != admissionNonce ||
+        !active_->uploadAdmissionDeadline || now >= *active_->uploadAdmissionDeadline)
         return false;
     active_->uploadReceipt.status = UploadStatus::validating;
     ++active_->stateRevision;
     return true;
 }
 
+std::optional<std::string> SessionService::expireUploadAdmission(
+    std::chrono::steady_clock::time_point now) {
+    std::lock_guard lock(mutex_);
+    if (!active_ || !active_->uploadAdmissionDeadline ||
+        now < *active_->uploadAdmissionDeadline)
+        return std::nullopt;
+    active_->uploadReceipt.status = UploadStatus::aborted;
+    active_->uploadReceipt.errorCode = "UPLOAD_TIMEOUT";
+    active_->uploadAdmissionNonce.reset();
+    active_->uploadAdmissionDeadline.reset();
+    active_->state = State::ending;
+    active_->endingSince = now;
+    ++active_->stateRevision;
+    return active_->sessionId;
+}
+
 bool SessionService::finishUpload(std::string_view sessionId,
                                   std::string_view uploadAttemptId, bool accepted,
-                                  std::optional<std::string> safeErrorCode) {
+                                  std::optional<std::string> safeErrorCode,
+                                  std::optional<MediaProcessing::MediaSource> media) {
     std::lock_guard lock(mutex_);
     if (!active_ || active_->sessionId != sessionId ||
         active_->uploadReceipt.uploadAttemptId != uploadAttemptId ||
         active_->uploadReceipt.status != UploadStatus::validating ||
-        (accepted && safeErrorCode) || (!accepted && !safeErrorCode))
+        (accepted && (safeErrorCode || !media)) ||
+        (!accepted && (!safeErrorCode || media)))
         return false;
     active_->uploadReceipt.status = accepted ? UploadStatus::accepted : UploadStatus::rejected;
     active_->uploadReceipt.errorCode = std::move(safeErrorCode);
     active_->hasAcceptedUpload = accepted;
+    active_->acceptedMedia = std::move(media);
     active_->uploadAdmissionNonce.reset();
     active_->uploadAdmissionDeadline.reset();
     ++active_->stateRevision;

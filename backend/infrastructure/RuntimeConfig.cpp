@@ -88,6 +88,7 @@ std::optional<RuntimeConfig> RuntimeConfig::fromPolicyJson(std::string_view json
         !readBounded(video, "maxHeight", 1080, config.maxVideoHeight) ||
         !readBounded(video, "maxFramesPerSecond", 60, config.maxVideoFramesPerSecond) ||
         !readBounded(runtime, "maxRequestBodyBytes", 105'906'176, config.maxRequestBodyBytes) ||
+        !readBounded(runtime, "spoolMemoryBytes", 10'485'760, config.spoolMemoryBytes) ||
         !readBounded(runtime, "sessionTmpfsBytes", 268'435'456, config.sessionTmpfsBytes) ||
         !document.isMember("upload") || !document["upload"].isObject() ||
         !document["upload"].isMember("maxAttempts") ||
