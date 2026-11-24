@@ -33,7 +33,7 @@ jobs:
         run: |
           {
             echo '### Deferred checks'
-            echo '- Backend lifecycle/integration contracts: pending T009/T010 and backend implementation.'
+            echo '- Full backend lifecycle, media-admission and event-order contracts: pending T009/T010 and T015-T019 completion.'
             echo '- Playwright accessibility workflows: pending T024.'
             echo '- Python model/evaluation tests: pending T022.'
             echo '- Release eligible: **false** until the full planned validation and real-model gate pass.'
@@ -45,3 +45,75 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y cmake ninja-build gcc-13 g++-13 make pkg-config nasm libssl-dev zlib1g-dev uuid-dev libpng-dev libjpeg-dev
       - run: cmake --preset dependencies && cmake --build --preset dependencies
       - run: cmake --preset dev && cmake --build --preset dev && ctest --preset dev
+  docker:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: docker build --target backend-runtime -t road-sign-backend:ci .
+      - run: docker build --target web-runtime -t road-sign-web:ci .
+      - run: docker compose --env-file config/demo.env.example build && docker compose --env-file config/demo.env.example up -d
+      - name: Check session lifecycle, event stream, and upload snapshot
+        run: |
+          python3 - <<'PY'
+          import http.cookiejar
+          import json
+          import ssl
+          import urllib.error
+          import urllib.request
+
+          base = "https://localhost:8443/api/v1"
+          opener = urllib.request.build_opener(
+              urllib.request.HTTPSHandler(context=ssl._create_unverified_context()),
+              urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
+          )
+
+          def request(path, method="GET", body=None, headers=None):
+              request_headers = {"Origin": "https://localhost"}
+              if headers:
+                  request_headers.update(headers)
+              data = None if body is None else json.dumps(body).encode()
+              if data is not None:
+                  request_headers["Content-Type"] = "application/json"
+              return opener.open(urllib.request.Request(
+                  base + path, data=data, headers=request_headers, method=method, timeout=10
+              ))
+
+          created = request("/sessions", "POST", {"sourceKind": "image"})
+          assert created.status == 201
+          session = json.loads(created.read())
+          session_id = session["sessionId"]
+          csrf = session["csrfToken"]
+
+          events = request(f"/sessions/{session_id}/events", headers={"Accept": "text/event-stream"})
+          assert events.readline().strip() == b"event: session.ready"
+          assert events.readline().startswith(b"data: {")
+
+          heartbeat = request(
+              f"/sessions/{session_id}/heartbeat", "POST", {"epoch": 1},
+              {"X-CSRF-Token": csrf},
+          )
+          assert heartbeat.status == 204
+          status = request(f"/sessions/{session_id}/upload-status")
+          assert json.loads(status.read())["uploadStatus"] == "idle"
+          ended = request(f"/sessions/{session_id}", "DELETE", headers={"X-CSRF-Token": csrf})
+          assert ended.status == 202
+          events.close()
+
+          try:
+              request(f"/sessions/{session_id}/upload-status")
+          except urllib.error.HTTPError as error:
+              assert error.code == 404
+          else:
+              raise AssertionError("ended session remained accessible")
+          PY
+      - name: Check health and missing-model readiness
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail --insecure https://localhost:8443/api/v1/health; then break; fi
+            sleep 2
+          done
+          curl --silent --fail --insecure https://localhost:8443/api/v1/capabilities
+          code=$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure https://localhost:8443/api/v1/ready)
+          test "$code" = 503
+      - if: always()
+        run: docker compose --env-file config/demo.env.example down --volumes

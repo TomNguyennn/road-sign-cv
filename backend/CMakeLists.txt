@@ -30,18 +30,25 @@ endif()
 
 add_executable(runtime-foundation-test tests/integration/RuntimeFoundationTest.cpp)
 target_include_directories(runtime-foundation-test PRIVATE "${CMAKE_SOURCE_DIR}/backend")
-target_link_libraries(runtime-foundation-test PRIVATE GTest::gtest_main)
+add_library(road-sign-runtime-config STATIC
+    infrastructure/RuntimeConfig.cpp
+    infrastructure/Logger.cpp)
+target_include_directories(road-sign-runtime-config PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(road-sign-runtime-config PUBLIC Drogon::Drogon)
+target_compile_options(road-sign-runtime-config PRIVATE -Wall -Wextra -Wpedantic -Werror)
+target_link_libraries(runtime-foundation-test PRIVATE GTest::gtest_main road-sign-runtime-config)
 target_compile_options(runtime-foundation-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME runtime-foundation COMMAND runtime-foundation-test)
 
 add_library(recognition-session STATIC
     modules/recognition-session/application/SessionService.cpp
-    modules/recognition-session/infrastructure/SessionExecutor.cpp)
+    modules/recognition-session/infrastructure/SessionExecutor.cpp
+    modules/recognition-session/infrastructure/SessionController.cpp)
 target_include_directories(recognition-session PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/modules/recognition-session/application"
     "${CMAKE_CURRENT_SOURCE_DIR}/modules/recognition-session/domain")
-target_link_libraries(recognition-session PRIVATE uuid)
+target_link_libraries(recognition-session PRIVATE uuid PUBLIC Drogon::Drogon)
 target_compile_options(recognition-session PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_executable(session-foundation-test
     modules/recognition-session/tests/SessionFoundationTest.cpp)
@@ -54,3 +61,8 @@ add_executable(session-executor-test
 target_link_libraries(session-executor-test PRIVATE recognition-session GTest::gtest_main)
 target_compile_options(session-executor-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME session-executor COMMAND session-executor-test)
+
+add_executable(road-sign-server app/Main.cpp)
+target_include_directories(road-sign-server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(road-sign-server PRIVATE recognition-session road-sign-runtime-config Drogon::Drogon)
+target_compile_options(road-sign-server PRIVATE -Wall -Wextra -Wpedantic -Werror)

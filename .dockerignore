@@ -1,4 +1,11 @@
 .git
+.github
+docs
+specs
+infra
+training
+reports
+constitution.md
 .agents
 .specify
 **/node_modules

@@ -35,6 +35,7 @@ CreateResult SessionService::create(SourceKind sourceKind, std::string_view orig
     session.sourceKind = sourceKind;
     session.csrfToken = randomUuid();
     session.maxUploadAttempts = maxUploadAttempts_;
+    session.eventAttachDeadline = now + kEventAttachWindow;
     session.heartbeatDeadline = now + kHeartbeatLease;
     active_ = session;
     return {CreateResult::Status::created, session};
@@ -44,8 +45,7 @@ bool SessionService::attachEvents(std::string_view sessionId,
                                   std::chrono::steady_clock::time_point now) {
     std::lock_guard lock(mutex_);
     if (!active_ || active_->sessionId != sessionId || active_->eventsAttached ||
-        active_->state != State::created || now > active_->heartbeatDeadline -
-                                                     (kHeartbeatLease - kEventAttachWindow))
+        active_->state != State::created || now > active_->eventAttachDeadline)
         return false;
     active_->eventsAttached = true;
     active_->state = State::awaitingInput;
@@ -68,26 +68,26 @@ bool SessionService::authenticate(std::string_view sessionId, std::string_view c
 }
 
 bool SessionService::heartbeat(std::string_view sessionId, std::string_view csrfToken,
-                               std::string_view origin,
+                               std::string_view origin, std::uint32_t epoch,
                                std::chrono::steady_clock::time_point now) {
     std::lock_guard lock(mutex_);
-    if (!authenticateLocked(sessionId, csrfToken, origin) || active_->state == State::ending)
+    if (!authenticateLocked(sessionId, csrfToken, origin) || active_->state == State::ending ||
+        active_->epoch != epoch || now >= active_->heartbeatDeadline)
         return false;
     active_->heartbeatDeadline = now + kHeartbeatLease;
-    ++active_->stateRevision;
     return true;
 }
 
-bool SessionService::beginEnd(std::string_view sessionId, std::string_view csrfToken,
-                              std::string_view origin,
-                              std::chrono::steady_clock::time_point now) {
+std::optional<std::uint64_t> SessionService::beginEnd(
+    std::string_view sessionId, std::string_view csrfToken, std::string_view origin,
+    std::chrono::steady_clock::time_point now) {
     std::lock_guard lock(mutex_);
     if (!authenticateLocked(sessionId, csrfToken, origin) || active_->state == State::ending)
-        return false;
+        return std::nullopt;
     active_->state = State::ending;
     active_->endingSince = now;
     ++active_->stateRevision;
-    return true;
+    return active_->stateRevision;
 }
 
 bool SessionService::completeCleanup(std::string_view sessionId) {
@@ -98,6 +98,16 @@ bool SessionService::completeCleanup(std::string_view sessionId) {
     ++active_->stateRevision;
     active_.reset();
     return true;
+}
+
+void SessionService::shutdown() noexcept {
+    std::lock_guard lock(mutex_);
+    if (!active_) return;
+    active_->state = State::ending;
+    ++active_->stateRevision;
+    active_->state = State::ended;
+    ++active_->stateRevision;
+    active_.reset();
 }
 
 bool SessionService::acceptsCallback(std::string_view sessionId, std::uint32_t epoch,
@@ -161,6 +171,8 @@ bool SessionService::finishUpload(std::string_view sessionId,
     active_->uploadReceipt.status = accepted ? UploadStatus::accepted : UploadStatus::rejected;
     active_->uploadReceipt.errorCode = std::move(safeErrorCode);
     active_->hasAcceptedUpload = accepted;
+    active_->uploadAdmissionNonce.reset();
+    active_->uploadAdmissionDeadline.reset();
     ++active_->stateRevision;
     return true;
 }

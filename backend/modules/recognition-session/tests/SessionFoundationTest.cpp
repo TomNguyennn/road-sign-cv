@@ -49,6 +49,13 @@ TEST(SessionFoundationTest, RequiresEventAttachmentBeforeInputAndCleanupBeforeNe
     EXPECT_TRUE(service.create(SourceKind::camera, "https://demo.example", now).session);
 }
 
+TEST(SessionFoundationTest, AllowsEventAttachmentUntilTenSecondDeadline) {
+    SessionService service{3, "https://demo.example"};
+    const auto now = std::chrono::steady_clock::now();
+    const auto session = service.create(SourceKind::image, "https://demo.example", now).session.value();
+    EXPECT_TRUE(service.attachEvents(session.sessionId, now + std::chrono::seconds{9}));
+}
+
 TEST(SessionFoundationTest, RejectsLateCallbacksAfterEndBegins) {
     SessionService service{3, "https://demo.example"};
     const auto now = std::chrono::steady_clock::now();
@@ -56,6 +63,27 @@ TEST(SessionFoundationTest, RejectsLateCallbacksAfterEndBegins) {
     EXPECT_TRUE(service.acceptsCallback(session.sessionId, 1, 1));
     ASSERT_TRUE(service.beginEnd(session.sessionId, session.csrfToken, "https://demo.example", now));
     EXPECT_FALSE(service.acceptsCallback(session.sessionId, 1, 1));
+}
+
+TEST(SessionFoundationTest, ShutdownReleasesTheOnlySessionLease) {
+    SessionService service{3, "https://demo.example"};
+    ASSERT_TRUE(service.create(SourceKind::image, "https://demo.example",
+                               std::chrono::steady_clock::now()).session);
+    service.shutdown();
+    EXPECT_FALSE(service.snapshot());
+    EXPECT_TRUE(service.create(SourceKind::camera, "https://demo.example",
+                               std::chrono::steady_clock::now()).session);
+}
+
+TEST(SessionFoundationTest, HeartbeatRejectsStaleEpoch) {
+    SessionService service{3, "https://demo.example"};
+    const auto now = std::chrono::steady_clock::now();
+    const auto session = service.create(SourceKind::camera, "https://demo.example", now).session.value();
+    ASSERT_TRUE(service.attachEvents(session.sessionId, now));
+    EXPECT_FALSE(service.heartbeat(session.sessionId, session.csrfToken, "https://demo.example",
+                                   2, now + std::chrono::seconds{5}));
+    EXPECT_TRUE(service.heartbeat(session.sessionId, session.csrfToken, "https://demo.example",
+                                  1, now + std::chrono::seconds{5}));
 }
 
 TEST(SessionFoundationTest, FailedUploadCanRetryButAcceptedUploadConsumesSourceSlot) {

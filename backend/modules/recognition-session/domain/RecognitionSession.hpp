@@ -20,6 +20,7 @@ struct Entity {
     std::string csrfToken;
     std::uint32_t audioGeneration{1};
     bool isMuted{};
+    std::chrono::steady_clock::time_point eventAttachDeadline;
     std::chrono::steady_clock::time_point heartbeatDeadline;
     std::uint32_t uploadAttemptsUsed{};
     std::uint32_t maxUploadAttempts{};

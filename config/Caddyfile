@@ -1,0 +1,22 @@
+{$DEMO_HOST:localhost} {
+    tls internal
+    root * /srv
+    encode zstd gzip
+    request_body {
+        max_size 101MB
+    }
+    @private path /internal/* /api/v1/internal/*
+    handle @private {
+        respond "not found" 404
+    }
+    @api path /api/v1/*
+    handle @api {
+        reverse_proxy backend:8080 {
+            flush_interval -1
+        }
+    }
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
+}

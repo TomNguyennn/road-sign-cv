@@ -5,11 +5,14 @@
 #include "modules/text-extraction/public/ExtractTextRequest.hpp"
 #include "modules/announcements/public/AcceptedInformation.hpp"
 #include "modules/speech/public/AudioArtifact.hpp"
+#include "infrastructure/RuntimeConfig.hpp"
+#include "infrastructure/Logger.hpp"
 
 #include <gtest/gtest.h>
 
 #include <limits>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -67,5 +70,60 @@ TEST(RuntimeFoundationTest, SignObservationRejectsInvalidConfidenceEpochAndGeome
     EXPECT_FALSE(valid.isValid(1, 2, {4, 4}));
     const SignObservation invalid{1, 2, 1.1, {1, 1, 2, 2}, std::nullopt, std::nullopt, 10.0};
     EXPECT_FALSE(invalid.isValid(1, 1, {4, 4}));
+}
+
+TEST(RuntimeFoundationTest, UploadAttemptPolicyAcceptsOnlyIntegerZeroThroughOneHundred) {
+    EXPECT_EQ(Infrastructure::RuntimeConfig::parseUploadAttempts("0"), 0);
+    EXPECT_EQ(Infrastructure::RuntimeConfig::parseUploadAttempts("100"), 100);
+    EXPECT_FALSE(Infrastructure::RuntimeConfig::parseUploadAttempts("101"));
+    EXPECT_FALSE(Infrastructure::RuntimeConfig::parseUploadAttempts("-1"));
+    EXPECT_FALSE(Infrastructure::RuntimeConfig::parseUploadAttempts("3x"));
+}
+
+TEST(RuntimeFoundationTest, PolicyAcceptsConfiguredDefaultsAndRejectsEnlargedHardLimits) {
+    constexpr std::string_view validPolicy = R"({
+        "policyVersion":"1",
+        "camera":{"maxWidth":1280,"maxHeight":720,"maxFramesPerSecond":5,
+                   "maxFrameBytes":1048576},
+        "image":{"maxBytes":10485760,"maxDecodedPixels":20000000},
+        "video":{"maxBytes":104857600,"maxDurationSeconds":300,"maxWidth":1920,
+                  "maxHeight":1080,"maxFramesPerSecond":60},
+        "upload":{"maxAttempts":3},
+        "runtime":{"metricsEnabled":false,"maxRequestBodyBytes":105906176,
+                    "sessionTmpfsBytes":268435456}
+    })";
+    const auto config = Infrastructure::RuntimeConfig::fromPolicyJson(validPolicy);
+    ASSERT_TRUE(config);
+    EXPECT_EQ(config->maxUploadAttempts, 3);
+    EXPECT_FALSE(config->metricsEnabled);
+    EXPECT_EQ(config->maxDecodedPixels, 20'000'000);
+
+    const std::vector<std::pair<std::string, std::string>> enlargedLimits{
+        {"1280", "1281"}, {"720", "721"}, {"5", "6"},
+        {"1048576", "1048577"},
+        {"10485760", "10485761"}, {"20000000", "20000001"},
+        {"104857600", "104857601"}, {"300", "301"}, {"1920", "1921"},
+        {"1080", "1081"}, {"60", "61"}, {"105906176", "105906177"},
+        {"268435456", "268435457"},
+    };
+    for (const auto& [limitValue, enlargedValue] : enlargedLimits) {
+        auto oversized = std::string{validPolicy};
+        const auto limit = oversized.find(limitValue);
+        ASSERT_NE(limit, std::string::npos);
+        oversized.replace(limit, limitValue.size(), enlargedValue);
+        EXPECT_FALSE(Infrastructure::RuntimeConfig::fromPolicyJson(oversized))
+            << "accepted an enlarged hard limit " << limitValue;
+    }
+    auto invalidAttemptLimit = std::string{validPolicy};
+    const auto attempts = invalidAttemptLimit.find("\"maxAttempts\":3");
+    ASSERT_NE(attempts, std::string::npos);
+    invalidAttemptLimit.replace(attempts, std::string_view{"\"maxAttempts\":3"}.size(),
+                                "\"maxAttempts\":101");
+    EXPECT_FALSE(Infrastructure::RuntimeConfig::fromPolicyJson(invalidAttemptLimit));
+}
+
+TEST(RuntimeFoundationTest, LoggerOnlyExposesFixedEventNames) {
+    EXPECT_EQ(Infrastructure::eventName(Infrastructure::Event::requestRejected), "request.rejected");
+    EXPECT_EQ(Infrastructure::eventName(Infrastructure::Event::sessionCreated), "session.created");
 }
 } // namespace RoadSign

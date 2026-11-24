@@ -1,0 +1,45 @@
+services:
+  backend:
+    build:
+      context: .
+      target: backend-runtime
+    environment:
+      PORT: "8080"
+      POLICY_CONFIG_PATH: /opt/road-sign/config/policy.json
+      TRUSTED_ORIGIN: "${TRUSTED_ORIGIN:-https://${DEMO_HOST:-localhost}}"
+      MAX_UPLOAD_ATTEMPTS: "${MAX_UPLOAD_ATTEMPTS:-3}"
+      RUNTIME_METRICS_ENABLED: "false"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ulimits:
+      core: 0
+    mem_limit: 4g
+    tmpfs:
+      - /run/road-sign:size=268435456,mode=0700,uid=10001,gid=10001
+    expose: ["8080"]
+    networks: [internal]
+
+  web:
+    build:
+      context: .
+      target: web-runtime
+    environment:
+      DEMO_HOST: ${DEMO_HOST:-localhost}
+    ports: ["${HTTPS_PORT:-8443}:443"]
+    volumes:
+      - caddy-data:/data
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/config:mode=0700]
+    depends_on: [backend]
+    networks: [internal]
+
+networks:
+  internal:
+    internal: true
+
+volumes:
+  caddy-data:

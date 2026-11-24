@@ -25,12 +25,13 @@ public:
     [[nodiscard]] bool authenticate(std::string_view sessionId, std::string_view csrfToken,
                                     std::string_view origin) const;
     [[nodiscard]] bool heartbeat(std::string_view sessionId, std::string_view csrfToken,
-                                 std::string_view origin,
+                                 std::string_view origin, std::uint32_t epoch,
                                  std::chrono::steady_clock::time_point now);
-    [[nodiscard]] bool beginEnd(std::string_view sessionId, std::string_view csrfToken,
-                                std::string_view origin,
-                                std::chrono::steady_clock::time_point now);
+    [[nodiscard]] std::optional<std::uint64_t> beginEnd(
+        std::string_view sessionId, std::string_view csrfToken, std::string_view origin,
+        std::chrono::steady_clock::time_point now);
     [[nodiscard]] bool completeCleanup(std::string_view sessionId);
+    void shutdown() noexcept;
     [[nodiscard]] bool acceptsCallback(std::string_view sessionId, std::uint32_t epoch,
                                        std::uint32_t audioGeneration) const;
     [[nodiscard]] bool beginProcessing(std::string_view sessionId);
