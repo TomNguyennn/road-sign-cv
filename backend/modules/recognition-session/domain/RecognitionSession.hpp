@@ -30,6 +30,8 @@ struct Entity {
 
     [[nodiscard]] bool canAdmitUpload() const noexcept {
         return state == State::awaitingInput && !hasAcceptedUpload &&
+               uploadReceipt.status != UploadStatus::receiving &&
+               uploadReceipt.status != UploadStatus::validating &&
                (maxUploadAttempts == 0 || uploadAttemptsUsed < maxUploadAttempts);
     }
 };

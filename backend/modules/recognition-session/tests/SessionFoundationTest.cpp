@@ -66,7 +66,9 @@ TEST(SessionFoundationTest, FailedUploadCanRetryButAcceptedUploadConsumesSourceS
     auto state = service.snapshot().value();
     const auto createdRevision = state.stateRevision;
     ASSERT_TRUE(service.beginUpload(session.sessionId, "attempt-one"));
+    EXPECT_FALSE(service.beginUpload(session.sessionId, "duplicate-attempt"));
     ASSERT_TRUE(service.setUploadValidating(session.sessionId, "attempt-one"));
+    EXPECT_FALSE(service.beginUpload(session.sessionId, "duplicate-validating-attempt"));
     ASSERT_TRUE(service.finishUpload(session.sessionId, "attempt-one", false, "INVALID_MEDIA"));
     state = service.snapshot().value();
     EXPECT_EQ(state.uploadAttemptsUsed, 1);
