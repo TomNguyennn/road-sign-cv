@@ -1,9 +1,12 @@
 #include "SessionService.hpp"
 
 #include <uuid/uuid.h>
+#include <sys/random.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <cerrno>
 #include <stdexcept>
 
 namespace RoadSign::RecognitionSession {
@@ -38,14 +41,34 @@ std::string SessionService::randomUuid() {
     return output;
 }
 
+std::string SessionService::randomToken() {
+    std::array<unsigned char, 32> bytes{};
+    std::size_t filled = 0;
+    while (filled < bytes.size()) {
+        const auto count = getrandom(bytes.data() + filled, bytes.size() - filled, 0);
+        if (count < 0 && errno == EINTR) continue;
+        if (count <= 0) throw std::runtime_error("secure random source unavailable");
+        filled += static_cast<std::size_t>(count);
+    }
+    constexpr char digits[] = "0123456789abcdef";
+    std::string token;
+    token.reserve(bytes.size() * 2);
+    for (const auto byte : bytes) {
+        token.push_back(digits[byte >> 4U]);
+        token.push_back(digits[byte & 0x0fU]);
+    }
+    return token;
+}
+
 CreateResult SessionService::create(SourceKind sourceKind, std::string_view origin,
                                     std::chrono::steady_clock::time_point now) {
     std::lock_guard lock(mutex_);
     if (origin != trustedOrigin_ || active_) return {CreateResult::Status::busy, std::nullopt};
     Entity session{};
     session.sessionId = randomUuid();
+    session.cookieToken = randomToken();
     session.sourceKind = sourceKind;
-    session.csrfToken = randomUuid();
+    session.csrfToken = randomToken();
     session.maxUploadAttempts = maxUploadAttempts_;
     session.eventAttachDeadline = now + kEventAttachWindow;
     session.heartbeatDeadline = now + kHeartbeatLease;

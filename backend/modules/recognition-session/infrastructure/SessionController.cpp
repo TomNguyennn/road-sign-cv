@@ -133,7 +133,7 @@ void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
         responseBody["uploadAttemptsUsed"] = 0;
         responseBody["maxUploadAttempts"] = session.maxUploadAttempts;
         auto response = jsonResponse(std::move(responseBody), k201Created);
-        response->addHeader("Set-Cookie", "rs_session=" + session.sessionId +
+        response->addHeader("Set-Cookie", "rs_session=" + session.cookieToken +
             "; Path=/api/v1; Secure; HttpOnly; SameSite=Strict");
         callback(response);
     }, {Post});
@@ -148,13 +148,9 @@ void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
             body["message"] = "Request authentication failed"; body["retryable"] = false;
             callback(jsonResponse(std::move(body), k403Forbidden)); return;
         }
-        if (!cookie || *cookie != id) {
-            Json::Value body; body["code"] = "NOT_FOUND";
-            body["message"] = "Session was not found"; body["retryable"] = false;
-            callback(jsonResponse(std::move(body), k404NotFound)); return;
-        }
         const auto activeSession = sessions.snapshot();
-        if (!activeSession || activeSession->sessionId != id) {
+        if (!cookie || !activeSession || activeSession->sessionId != id ||
+            *cookie != activeSession->cookieToken) {
             Json::Value body; body["code"] = "NOT_FOUND";
             body["message"] = "Session was not found"; body["retryable"] = false;
             callback(jsonResponse(std::move(body), k404NotFound)); return;
@@ -202,7 +198,8 @@ void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
         }
         const auto cookie = cookieValue(request);
         const auto activeSession = sessions.snapshot();
-        if (!cookie || *cookie != id || !activeSession || activeSession->sessionId != id) {
+        if (!cookie || !activeSession || activeSession->sessionId != id ||
+            *cookie != activeSession->cookieToken) {
             Json::Value body; body["code"] = "NOT_FOUND";
             body["message"] = "Session was not found"; body["retryable"] = false;
             callback(jsonResponse(std::move(body), k404NotFound)); return;
@@ -226,18 +223,13 @@ void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
         callback(response);
     }, {Post});
 
-    app.registerHandler("/api/v1/sessions/{1}/upload-status", [&sessions, &config](
+    app.registerHandler("/api/v1/sessions/{1}/upload-status", [&sessions](
         const HttpRequestPtr& request, std::function<void(const HttpResponsePtr&)>&& callback,
         const std::string& id) {
-        const auto origin = request->getHeader("origin");
         const auto session = sessions.snapshot();
-        if (origin != config.trustedOrigin) {
-            Json::Value body; body["code"] = "FORBIDDEN";
-            body["message"] = "Request origin is not allowed"; body["retryable"] = false;
-            callback(jsonResponse(std::move(body), k403Forbidden)); return;
-        }
         const auto cookie = cookieValue(request);
-        if (!cookie || *cookie != id || !session || session->sessionId != id) {
+        if (!cookie || !session || session->sessionId != id ||
+            *cookie != session->cookieToken) {
             Json::Value body; body["code"] = "NOT_FOUND";
             body["message"] = "Session was not found"; body["retryable"] = false;
             callback(jsonResponse(std::move(body), k404NotFound)); return;

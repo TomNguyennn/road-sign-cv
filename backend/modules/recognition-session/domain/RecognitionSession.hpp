@@ -14,6 +14,7 @@ enum class State { created, awaitingInput, processing, reviewing, ending, ended 
 
 struct Entity {
     std::string sessionId;
+    std::string cookieToken;
     SourceKind sourceKind;
     std::uint32_t epoch{1};
     State state{State::created};

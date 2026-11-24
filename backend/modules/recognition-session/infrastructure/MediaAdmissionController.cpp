@@ -306,7 +306,9 @@ void registerMediaAdmissionRoutes(HttpAppFramework& app, SessionService& session
         }
         const auto id = sessionIdFromUri(request->getHeader("x-forwarded-uri"));
         const auto cookie = request->getCookie("rs_session");
-        if (!id || cookie.empty() || cookie != *id) {
+        const auto session = sessions.snapshot();
+        if (!id || cookie.empty() || !session || session->sessionId != *id ||
+            cookie != session->cookieToken) {
             Json::Value body; body["code"] = "NOT_FOUND";
             body["message"] = "Session was not found"; body["retryable"] = false;
             callback(jsonResponse(std::move(body), k404NotFound)); return;
@@ -334,7 +336,9 @@ void registerMediaAdmissionRoutes(HttpAppFramework& app, SessionService& session
         const HttpRequestPtr& request, std::function<void(const HttpResponsePtr&)>&& callback,
         const std::string& id) {
         const auto cookie = request->getCookie("rs_session");
-        if (cookie.empty() || cookie != id ||
+        const auto owned = sessions.snapshot();
+        if (cookie.empty() || !owned || owned->sessionId != id ||
+            cookie != owned->cookieToken ||
             request->getHeader("origin") != config.trustedOrigin ||
             request->getHeader("x-csrf-token").empty()) {
             Json::Value body; body["code"] = "FORBIDDEN";

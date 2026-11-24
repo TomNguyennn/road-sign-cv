@@ -73,13 +73,14 @@ jobs:
           import zlib
 
           base = "https://localhost:8443/api/v1"
+          cookie_jar = http.cookiejar.CookieJar()
           opener = urllib.request.build_opener(
               urllib.request.HTTPSHandler(context=ssl._create_unverified_context()),
-              urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
+              urllib.request.HTTPCookieProcessor(cookie_jar),
           )
 
-          def request(path, method="GET", body=None, headers=None):
-              request_headers = {"Origin": "https://localhost"}
+          def request(path, method="GET", body=None, headers=None, include_origin=True):
+              request_headers = {"Origin": "https://localhost"} if include_origin else {}
               if headers:
                   request_headers.update(headers)
               data = None if body is None else json.dumps(body).encode()
@@ -139,13 +140,15 @@ jobs:
           session = json.loads(created.read())
           session_id = session["sessionId"]
           csrf = session["csrfToken"]
+          cookie = next(item.value for item in cookie_jar if item.name == "rs_session")
+          assert len(cookie) == 64 and cookie != session_id and cookie != csrf
 
-          events = request(f"/sessions/{session_id}/events", headers={"Accept": "text/event-stream"})
+          events = request(f"/sessions/{session_id}/events", headers={"Accept": "text/event-stream"}, include_origin=False)
           assert events.readline().strip() == b"event: session.ready"
           ready_envelope = json.loads(events.readline()[6:])
           assert ready_envelope["type"] == "session.ready" and ready_envelope["eventSeq"] == 1
           try:
-              request(f"/sessions/{session_id}/events", headers={"Accept": "text/event-stream"})
+              request(f"/sessions/{session_id}/events", headers={"Accept": "text/event-stream"}, include_origin=False)
           except urllib.error.HTTPError as error:
               assert error.code == 409
           else:
@@ -156,7 +159,7 @@ jobs:
               {"X-CSRF-Token": csrf},
           )
           assert heartbeat.status == 204
-          status = request(f"/sessions/{session_id}/upload-status")
+          status = request(f"/sessions/{session_id}/upload-status", include_origin=False)
           assert json.loads(status.read())["uploadStatus"] == "idle"
           first_attempt = "edc6258a-a013-467e-ace1-865af6048911"
           try:
@@ -181,7 +184,7 @@ jobs:
           accepted_event = read_upload_event("accepted")
           assert accepted_event["eventSeq"] > rejected["eventSeq"]
           assert accepted_event["payload"]["uploadAttemptsUsed"] == 2
-          status = request(f"/sessions/{session_id}/upload-status")
+          status = request(f"/sessions/{session_id}/upload-status", include_origin=False)
           assert json.loads(status.read())["uploadStatus"] == "accepted"
           ended = request(f"/sessions/{session_id}", "DELETE", headers={"X-CSRF-Token": csrf})
           assert ended.status == 202

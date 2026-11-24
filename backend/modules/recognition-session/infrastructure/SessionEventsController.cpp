@@ -87,15 +87,10 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
     app.registerHandler("/api/v1/sessions/{1}/events", [&sessions, &config](
         const HttpRequestPtr& request, std::function<void(const HttpResponsePtr&)>&& callback,
         const std::string& id) {
-        const auto origin = request->getHeader("origin");
-        if (origin != config.trustedOrigin) {
-            Json::Value body; body["code"] = "FORBIDDEN";
-            body["message"] = "Request origin is not allowed"; body["retryable"] = false;
-            callback(jsonResponse(std::move(body), k403Forbidden)); return;
-        }
         const auto session = sessions.snapshot();
         const auto& cookie = request->getCookie("rs_session");
-        if (cookie.empty() || cookie != id || !session || session->sessionId != id) {
+        if (cookie.empty() || !session || session->sessionId != id ||
+            cookie != session->cookieToken) {
             Json::Value body; body["code"] = "NOT_FOUND";
             body["message"] = "Session was not found"; body["retryable"] = false;
             callback(jsonResponse(std::move(body), k404NotFound)); return;

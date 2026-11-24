@@ -35,6 +35,9 @@ TEST(SessionFoundationTest, RequiresTrustedOriginAndCsrfForOwnership) {
                                  std::chrono::steady_clock::now());
     ASSERT_TRUE(result.session);
     const auto& session = *result.session;
+    EXPECT_EQ(session.cookieToken.size(), 64);
+    EXPECT_NE(session.cookieToken, session.sessionId);
+    EXPECT_NE(session.cookieToken, session.csrfToken);
     EXPECT_TRUE(service.authenticate(session.sessionId, session.csrfToken, "https://demo.example"));
     EXPECT_FALSE(service.authenticate(session.sessionId, session.csrfToken, "https://attacker.example"));
     EXPECT_FALSE(service.authenticate(session.sessionId, "wrong", "https://demo.example"));

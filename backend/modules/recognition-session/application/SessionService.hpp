@@ -63,6 +63,7 @@ public:
 
 private:
     [[nodiscard]] static std::string randomUuid();
+    [[nodiscard]] static std::string randomToken();
     [[nodiscard]] bool authenticateLocked(std::string_view sessionId,
                                           std::string_view csrfToken,
                                           std::string_view origin) const;
