@@ -4,8 +4,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake ninja-build gcc-13 g++-13 make pkg-config git ca-certificates nasm \
     libssl-dev zlib1g-dev uuid-dev libpng-dev libjpeg-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
-COPY . .
+COPY CMakeLists.txt CMakePresets.json ./
+COPY cmake/ ./cmake/
 RUN cmake --preset dependencies && cmake --build --preset dependencies
+COPY backend/ ./backend/
+COPY config/ ./config/
 RUN cmake --preset dev && cmake --build --preset dev --target road-sign-server
 
 FROM backend-build AS backend-tests

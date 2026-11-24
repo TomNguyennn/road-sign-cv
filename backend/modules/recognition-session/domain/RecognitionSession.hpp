@@ -26,6 +26,8 @@ struct Entity {
     std::uint32_t maxUploadAttempts{};
     bool hasAcceptedUpload{};
     UploadReceipt uploadReceipt;
+    std::optional<std::string> uploadAdmissionNonce;
+    std::optional<std::chrono::steady_clock::time_point> uploadAdmissionDeadline;
     bool eventsAttached{};
     std::optional<std::chrono::steady_clock::time_point> endingSince;
 

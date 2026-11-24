@@ -35,11 +35,13 @@ services:
     security_opt: [no-new-privileges:true]
     tmpfs: [/config:mode=0700]
     depends_on: [backend]
-    networks: [internal]
+    networks: [internal, edge]
 
 networks:
   internal:
     internal: true
+  edge:
+    driver: bridge
 
 volumes:
   caddy-data:

@@ -17,24 +17,8 @@ HttpResponsePtr jsonResponse(Json::Value body, HttpStatusCode status = k200OK) {
 }
 
 std::optional<std::string> cookieValue(const HttpRequestPtr& request) {
-    const auto cookieHeader = request->getHeader("cookie");
-    std::string_view cookies{cookieHeader};
-    std::optional<std::string> value;
-    while (!cookies.empty()) {
-        const auto separator = cookies.find(';');
-        auto part = cookies.substr(0, separator);
-        const auto first = part.find_first_not_of(" \t");
-        if (first != std::string_view::npos) part.remove_prefix(first);
-        const auto last = part.find_last_not_of(" \t");
-        if (last != std::string_view::npos) part = part.substr(0, last + 1);
-        constexpr std::string_view prefix = "rs_session=";
-        if (part.starts_with(prefix)) {
-            if (value) return std::nullopt;
-            value = std::string{part.substr(prefix.size())};
-        }
-        if (separator == std::string_view::npos) break;
-        cookies.remove_prefix(separator + 1);
-    }
+    const auto& value = request->getCookie("rs_session");
+    if (value.empty()) return std::nullopt;
     return value;
 }
 

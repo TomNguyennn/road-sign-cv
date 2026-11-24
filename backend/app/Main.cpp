@@ -4,14 +4,18 @@
 #include "modules/recognition-session/infrastructure/SessionController.hpp"
 
 #include <drogon/drogon.h>
+#include <json/json.h>
 
 #include <charconv>
 #include <cstdlib>
 #include <optional>
 #include <string_view>
+#include <utility>
 
 namespace {
 constexpr std::uint16_t kDefaultPort = 8080;
+constexpr std::string_view kMaxRequestBodySize = "101M";
+constexpr std::string_view kMaxInMemoryBodySize = "10M";
 
 struct SessionShutdown {
     RoadSign::RecognitionSession::SessionService& sessions;
@@ -38,6 +42,11 @@ int main() {
     }
     RecognitionSession::SessionService sessions{config->maxUploadAttempts, config->trustedOrigin};
     const SessionShutdown sessionShutdown{sessions};
+    Json::Value drogonConfig;
+    drogonConfig["app"]["upload_path"] = "/run/road-sign";
+    drogonConfig["app"]["client_max_body_size"] = kMaxRequestBodySize.data();
+    drogonConfig["app"]["client_max_memory_body_size"] = kMaxInMemoryBodySize.data();
+    drogon::app().loadConfigJson(std::move(drogonConfig));
     RecognitionSession::registerSessionRoutes(drogon::app(), sessions, *config);
     const auto port = parsePort(std::getenv("PORT"));
     if (!port) {
