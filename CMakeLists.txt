@@ -59,6 +59,13 @@ target_include_directories(bytetrack SYSTEM PUBLIC "${BYTETRACK_SOURCE_DIR}/incl
 target_link_libraries(bytetrack PUBLIC Eigen3::Eigen opencv_core opencv_imgproc)
 
 enable_testing()
+add_library(road-sign-backend INTERFACE)
+add_subdirectory(backend)
+add_test(NAME module-boundaries COMMAND ${CMAKE_COMMAND}
+    -DSOURCE_ROOT=${CMAKE_SOURCE_DIR}
+    -DTEST_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+    -DTEST_BINARY_DIR=${CMAKE_BINARY_DIR}/module-boundary-test
+    -P ${CMAKE_SOURCE_DIR}/backend/tests/ModuleBoundariesTest.cmake)
 add_test(NAME bytetrack-include-patch COMMAND ${CMAKE_COMMAND}
     -DTEST_BINARY_DIR=${CMAKE_BINARY_DIR}/bytetrack-patch-test
     -P ${CMAKE_SOURCE_DIR}/cmake/tests/ByteTrackIncludesTest.cmake)
