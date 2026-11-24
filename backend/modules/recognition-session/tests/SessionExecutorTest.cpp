@@ -75,4 +75,49 @@ TEST(SessionExecutorTest, RejectsPublicationAfterIdentityChanges) {
     std::this_thread::sleep_for(std::chrono::milliseconds{10});
     EXPECT_FALSE(published.load());
 }
+
+TEST(SessionExecutorTest, SpeechHandoffUsesTheSameStaleGenerationFence) {
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool ready = false;
+    bool release = false;
+    std::atomic<bool> published = false;
+    std::atomic<bool> cancelled = false;
+    bool done = false;
+    const WorkIdentity identity{9, 3, 4};
+    SessionExecutor executor(
+        [](const Frame&, WorkIdentity, std::stop_token, const auto&) {},
+        [](std::uint64_t) {},
+        [&](std::string, WorkIdentity, std::stop_token stopToken,
+            const SessionExecutor::Publish& publish) {
+            std::unique_lock lock(mutex);
+            ready = true;
+            condition.notify_all();
+            condition.wait(lock, [&] { return release; });
+            lock.unlock();
+            cancelled = stopToken.stop_requested();
+            published = publish([&] { published = true; });
+            lock.lock();
+            done = true;
+            condition.notify_all();
+        });
+    executor.setIdentity(identity);
+    executor.submitSpeech("test phrase", identity);
+    {
+        std::unique_lock lock(mutex);
+        condition.wait(lock, [&] { return ready; });
+    }
+    executor.setIdentity({9, 4, 4});
+    {
+        std::lock_guard lock(mutex);
+        release = true;
+    }
+    condition.notify_all();
+    {
+        std::unique_lock lock(mutex);
+        condition.wait(lock, [&] { return done; });
+    }
+    EXPECT_TRUE(cancelled.load());
+    EXPECT_FALSE(published.load());
+}
 } // namespace RoadSign::RecognitionSession
