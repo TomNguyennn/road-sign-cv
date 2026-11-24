@@ -1,0 +1,189 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc-13",
+        "CMAKE_CXX_COMPILER": "g++-13",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "FETCHCONTENT_BASE_DIR": "${sourceDir}/build/fetched"
+      }
+    },
+    {
+      "name": "dependencies",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/dependencies",
+      "cacheVariables": {
+        "ROAD_SIGN_DEPENDENCIES_ONLY": true
+      }
+    },
+    {
+      "name": "dev",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/dev",
+      "cacheVariables": {
+        "ROAD_SIGN_SANITIZER": "none"
+      }
+    },
+    {
+      "name": "asan",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/asan",
+      "cacheVariables": {
+        "ROAD_SIGN_SANITIZER": "address-undefined"
+      }
+    },
+    {
+      "name": "tsan",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/tsan",
+      "cacheVariables": {
+        "ROAD_SIGN_SANITIZER": "thread"
+      }
+    },
+    {
+      "name": "dependencies-arm64",
+      "inherits": "dependencies",
+      "binaryDir": "${sourceDir}/build/arm64/dependencies",
+      "cacheVariables": {
+        "ROAD_SIGN_NATIVE_PREFIX": "${sourceDir}/build/arm64/native"
+      }
+    },
+    {
+      "name": "dev-arm64",
+      "inherits": "dev",
+      "binaryDir": "${sourceDir}/build/arm64/dev",
+      "cacheVariables": {
+        "ROAD_SIGN_NATIVE_PREFIX": "${sourceDir}/build/arm64/native"
+      }
+    },
+    {
+      "name": "asan-arm64",
+      "inherits": "asan",
+      "binaryDir": "${sourceDir}/build/arm64/asan",
+      "cacheVariables": {
+        "ROAD_SIGN_NATIVE_PREFIX": "${sourceDir}/build/arm64/native"
+      }
+    },
+    {
+      "name": "tsan-arm64",
+      "inherits": "tsan",
+      "binaryDir": "${sourceDir}/build/arm64/tsan",
+      "cacheVariables": {
+        "ROAD_SIGN_NATIVE_PREFIX": "${sourceDir}/build/arm64/native"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dependencies",
+      "configurePreset": "dependencies",
+      "jobs": 1
+    },
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "jobs": 2
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "jobs": 2
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan",
+      "jobs": 2
+    },
+    {
+      "name": "dependencies-arm64",
+      "configurePreset": "dependencies-arm64",
+      "jobs": 1
+    },
+    {
+      "name": "dev-arm64",
+      "configurePreset": "dev-arm64",
+      "jobs": 2
+    },
+    {
+      "name": "asan-arm64",
+      "configurePreset": "asan-arm64",
+      "jobs": 2
+    },
+    {
+      "name": "tsan-arm64",
+      "configurePreset": "tsan-arm64",
+      "jobs": 2
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "dev-arm64",
+      "configurePreset": "dev-arm64",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "asan-arm64",
+      "configurePreset": "asan-arm64",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "tsan-arm64",
+      "configurePreset": "tsan-arm64",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.28)
+project(OnnxRuntimeSmoke LANGUAGES CXX)
+
+enable_testing()
+include("${CMAKE_CURRENT_LIST_DIR}/../../OnnxRuntime.cmake")
+add_executable(onnx-runtime-smoke OnnxRuntimeSmoke.cpp)
+target_compile_features(onnx-runtime-smoke PRIVATE cxx_std_20)
+target_compile_options(onnx-runtime-smoke PRIVATE -Wall -Wextra -Wpedantic -Werror)
+target_link_libraries(onnx-runtime-smoke PRIVATE ONNXRuntime::ONNXRuntime)
+add_test(NAME onnx-runtime-smoke COMMAND onnx-runtime-smoke)
