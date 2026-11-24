@@ -33,6 +33,14 @@ public:
     [[nodiscard]] bool completeCleanup(std::string_view sessionId);
     [[nodiscard]] bool acceptsCallback(std::string_view sessionId, std::uint32_t epoch,
                                        std::uint32_t audioGeneration) const;
+    [[nodiscard]] bool beginProcessing(std::string_view sessionId);
+    [[nodiscard]] bool finishStillImage(std::string_view sessionId);
+    [[nodiscard]] bool beginUpload(std::string_view sessionId, std::string uploadAttemptId);
+    [[nodiscard]] bool setUploadValidating(std::string_view sessionId,
+                                           std::string_view uploadAttemptId);
+    [[nodiscard]] bool finishUpload(std::string_view sessionId,
+                                    std::string_view uploadAttemptId, bool accepted,
+                                    std::optional<std::string> safeErrorCode = std::nullopt);
     [[nodiscard]] std::optional<Entity> snapshot() const;
 
 private:

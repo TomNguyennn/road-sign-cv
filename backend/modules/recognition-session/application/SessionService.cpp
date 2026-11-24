@@ -3,6 +3,7 @@
 #include <uuid/uuid.h>
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace RoadSign::RecognitionSession {
 namespace {
@@ -12,8 +13,10 @@ constexpr auto kEventAttachWindow = std::chrono::seconds{10};
 } // namespace
 
 SessionService::SessionService(std::uint32_t maxUploadAttempts, std::string trustedOrigin)
-    : maxUploadAttempts_(std::min(maxUploadAttempts, 100U)),
-      trustedOrigin_(std::move(trustedOrigin)) {}
+    : maxUploadAttempts_(maxUploadAttempts), trustedOrigin_(std::move(trustedOrigin)) {
+    if (maxUploadAttempts > 100 || trustedOrigin_.empty())
+        throw std::invalid_argument("invalid session service configuration");
+}
 
 std::string SessionService::randomUuid() {
     uuid_t bytes;
@@ -103,6 +106,63 @@ bool SessionService::acceptsCallback(std::string_view sessionId, std::uint32_t e
     return active_ && active_->sessionId == sessionId && active_->state != State::ending &&
            active_->state != State::ended && active_->epoch == epoch &&
            active_->audioGeneration == audioGeneration;
+}
+
+bool SessionService::beginProcessing(std::string_view sessionId) {
+    std::lock_guard lock(mutex_);
+    if (!active_ || active_->sessionId != sessionId || active_->state != State::awaitingInput)
+        return false;
+    active_->state = State::processing;
+    ++active_->stateRevision;
+    return true;
+}
+
+bool SessionService::finishStillImage(std::string_view sessionId) {
+    std::lock_guard lock(mutex_);
+    if (!active_ || active_->sessionId != sessionId || active_->state != State::processing)
+        return false;
+    active_->state = State::reviewing;
+    ++active_->stateRevision;
+    return true;
+}
+
+bool SessionService::beginUpload(std::string_view sessionId, std::string uploadAttemptId) {
+    std::lock_guard lock(mutex_);
+    if (!active_ || active_->sessionId != sessionId || !active_->canAdmitUpload() ||
+        uploadAttemptId.empty())
+        return false;
+    ++active_->uploadAttemptsUsed;
+    active_->uploadReceipt = {std::move(uploadAttemptId), UploadStatus::receiving, std::nullopt};
+    ++active_->stateRevision;
+    return true;
+}
+
+bool SessionService::setUploadValidating(std::string_view sessionId,
+                                         std::string_view uploadAttemptId) {
+    std::lock_guard lock(mutex_);
+    if (!active_ || active_->sessionId != sessionId ||
+        active_->uploadReceipt.uploadAttemptId != uploadAttemptId ||
+        active_->uploadReceipt.status != UploadStatus::receiving)
+        return false;
+    active_->uploadReceipt.status = UploadStatus::validating;
+    ++active_->stateRevision;
+    return true;
+}
+
+bool SessionService::finishUpload(std::string_view sessionId,
+                                  std::string_view uploadAttemptId, bool accepted,
+                                  std::optional<std::string> safeErrorCode) {
+    std::lock_guard lock(mutex_);
+    if (!active_ || active_->sessionId != sessionId ||
+        active_->uploadReceipt.uploadAttemptId != uploadAttemptId ||
+        active_->uploadReceipt.status != UploadStatus::validating ||
+        (accepted && safeErrorCode) || (!accepted && !safeErrorCode))
+        return false;
+    active_->uploadReceipt.status = accepted ? UploadStatus::accepted : UploadStatus::rejected;
+    active_->uploadReceipt.errorCode = std::move(safeErrorCode);
+    active_->hasAcceptedUpload = accepted;
+    ++active_->stateRevision;
+    return true;
 }
 
 std::optional<Entity> SessionService::snapshot() const {

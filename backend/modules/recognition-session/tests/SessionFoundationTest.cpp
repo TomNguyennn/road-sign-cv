@@ -57,4 +57,26 @@ TEST(SessionFoundationTest, RejectsLateCallbacksAfterEndBegins) {
     ASSERT_TRUE(service.beginEnd(session.sessionId, session.csrfToken, "https://demo.example", now));
     EXPECT_FALSE(service.acceptsCallback(session.sessionId, 1, 1));
 }
+
+TEST(SessionFoundationTest, FailedUploadCanRetryButAcceptedUploadConsumesSourceSlot) {
+    SessionService service{2, "https://demo.example"};
+    const auto now = std::chrono::steady_clock::now();
+    const auto session = service.create(SourceKind::image, "https://demo.example", now).session.value();
+    ASSERT_TRUE(service.attachEvents(session.sessionId, now));
+    auto state = service.snapshot().value();
+    const auto createdRevision = state.stateRevision;
+    ASSERT_TRUE(service.beginUpload(session.sessionId, "attempt-one"));
+    ASSERT_TRUE(service.setUploadValidating(session.sessionId, "attempt-one"));
+    ASSERT_TRUE(service.finishUpload(session.sessionId, "attempt-one", false, "INVALID_MEDIA"));
+    state = service.snapshot().value();
+    EXPECT_EQ(state.uploadAttemptsUsed, 1);
+    EXPECT_FALSE(state.hasAcceptedUpload);
+    EXPECT_EQ(state.uploadReceipt.status, UploadStatus::rejected);
+    EXPECT_GT(state.stateRevision, createdRevision);
+    ASSERT_TRUE(service.beginUpload(session.sessionId, "attempt-two"));
+    ASSERT_TRUE(service.setUploadValidating(session.sessionId, "attempt-two"));
+    ASSERT_TRUE(service.finishUpload(session.sessionId, "attempt-two", true));
+    EXPECT_TRUE(service.snapshot()->hasAcceptedUpload);
+    EXPECT_FALSE(service.beginUpload(session.sessionId, "attempt-three"));
+}
 } // namespace RoadSign::RecognitionSession

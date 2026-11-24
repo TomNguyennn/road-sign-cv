@@ -14,6 +14,7 @@ This log records issues that changed the implementation or delayed validation. I
 - **CI branch trigger:** CI initially ran only on pull requests and pushes to `main`. The feature branch `001-assistive-sign-recognition` was added to the push trigger so its pushes run CI.
 - **Stale container source recurred:** Later edits again did not appear in the container bind view. Explicit `docker cp` synchronization was needed before ARM64 compilation; the final 8-test suite passed after syncing. Keep checking host/container hashes before treating a container build as evidence for current host files.
 - **Executor compile issues:** The first bounded-worker build exposed a wrong shared-header include path and an invalid default construction of an immutable `Frame`. The include root was corrected, the work item became optional, and the ARM64 suite passed 8/8.
+- **Recursive bind-mount copy:** Copying the entire session module directory into its own bind-mounted destination created nested duplicate source directories. The copies were removed in a corrective commit; future syncs use individual files and verify canonical paths before building.
 
 ## Current validation boundary
 

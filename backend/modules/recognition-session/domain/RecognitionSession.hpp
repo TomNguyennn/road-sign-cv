@@ -1,5 +1,7 @@
 #pragma once
 
+#include "UploadReceipt.hpp"
+
 #include <chrono>
 #include <cstdint>
 #include <optional>
@@ -22,6 +24,7 @@ struct Entity {
     std::uint32_t uploadAttemptsUsed{};
     std::uint32_t maxUploadAttempts{};
     bool hasAcceptedUpload{};
+    UploadReceipt uploadReceipt;
     bool eventsAttached{};
     std::optional<std::chrono::steady_clock::time_point> endingSince;
 
