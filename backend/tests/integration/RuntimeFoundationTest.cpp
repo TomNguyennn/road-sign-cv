@@ -80,14 +80,36 @@ TEST(RuntimeFoundationTest, UploadAttemptPolicyAcceptsOnlyIntegerZeroThroughOneH
     EXPECT_FALSE(Infrastructure::RuntimeConfig::parseUploadAttempts("3x"));
 }
 
+TEST(RuntimeFoundationTest, RuntimeMetricsFlagAcceptsOnlyExplicitBooleans) {
+    EXPECT_EQ(Infrastructure::RuntimeConfig::parseBoolean("true"), true);
+    EXPECT_EQ(Infrastructure::RuntimeConfig::parseBoolean("false"), false);
+    EXPECT_FALSE(Infrastructure::RuntimeConfig::parseBoolean("1"));
+    EXPECT_FALSE(Infrastructure::RuntimeConfig::parseBoolean("TRUE"));
+}
+
 TEST(RuntimeFoundationTest, PolicyAcceptsConfiguredDefaultsAndRejectsEnlargedHardLimits) {
     constexpr std::string_view validPolicy = R"({
         "policyVersion":"1",
         "camera":{"maxWidth":1280,"maxHeight":720,"maxFramesPerSecond":5,
-                   "maxFrameBytes":1048576},
+                   "maxFrameBytes":1048576,"jpegQuality":0.8},
         "image":{"maxBytes":10485760,"maxDecodedPixels":20000000},
         "video":{"maxBytes":104857600,"maxDurationSeconds":300,"maxWidth":1920,
                   "maxHeight":1080,"maxFramesPerSecond":60},
+        "recognition":{"inputSize":640,"trackingScoreFloor":0.10,"nmsIou":0.45,
+                       "acceptedScore":0.60,"temporalRequired":3,"temporalWindow":5,
+                       "temporalWindowMs":2000,"stillScore":0.75},
+        "tracking":{"highScore":0.50,"lowScore":0.10,"newTrackScore":0.60,
+                    "maxAssociationCost":0.80,"expiryMs":2000,"maxTracks":100,"perClass":true},
+        "ocr":{"maxReadsPerSecond":1,"maxCropsPerFrame":4,"minWordConfidence":70,
+               "consensusSamples":3,"consensusMatches":2,"consensusWindowMs":2000,
+               "stillMaxCrops":1,"minCropSize":16,"maxCropEdge":1600,
+               "unicodeNfkc":true,"caseFoldConsensus":true},
+        "speech":{"maxPending":3,"maxPendingAgeMs":5000,"maxTextCharacters":500,
+                  "maxWavDurationMs":45000,"maxHistory":200,
+                  "queueOverflow":"dropLowestPriorityNewestTie",
+                  "categoryPriority":[0,0,0,0,2,1,2,0]},
+        "lifecycle":{"heartbeatMs":5000,"leaseMs":15000,"eventAttachMs":10000,
+                     "resourceFailure":"endSessionNoDiskSpill"},
         "upload":{"maxAttempts":3},
         "runtime":{"metricsEnabled":false,"maxRequestBodyBytes":105906176,
                     "spoolMemoryBytes":10485760,
@@ -127,6 +149,18 @@ TEST(RuntimeFoundationTest, PolicyAcceptsConfiguredDefaultsAndRejectsEnlargedHar
     invalidAttemptLimit.replace(attempts, std::string_view{"\"maxAttempts\":3"}.size(),
                                 "\"maxAttempts\":101");
     EXPECT_FALSE(Infrastructure::RuntimeConfig::fromPolicyJson(invalidAttemptLimit));
+    auto alteredRecognition = std::string{validPolicy};
+    const auto score = alteredRecognition.find("\"acceptedScore\":0.60");
+    ASSERT_NE(score, std::string::npos);
+    alteredRecognition.replace(score, std::string_view{"\"acceptedScore\":0.60"}.size(),
+                               "\"acceptedScore\":0.10");
+    EXPECT_FALSE(Infrastructure::RuntimeConfig::fromPolicyJson(alteredRecognition));
+    auto alteredPriority = std::string{validPolicy};
+    const auto priority = alteredPriority.find("[0,0,0,0,2,1,2,0]");
+    ASSERT_NE(priority, std::string::npos);
+    alteredPriority.replace(priority, std::string_view{"[0,0,0,0,2,1,2,0]"}.size(),
+                            "[2,2,2,2,2,1,2,0]");
+    EXPECT_FALSE(Infrastructure::RuntimeConfig::fromPolicyJson(alteredPriority));
 }
 
 TEST(RuntimeFoundationTest, LoggerOnlyExposesFixedEventNames) {

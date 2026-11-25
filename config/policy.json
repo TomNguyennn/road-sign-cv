@@ -1,8 +1,13 @@
 {
   "policyVersion": "1",
-  "camera": { "maxWidth": 1280, "maxHeight": 720, "maxFramesPerSecond": 5, "maxFrameBytes": 1048576 },
+  "camera": { "maxWidth": 1280, "maxHeight": 720, "maxFramesPerSecond": 5, "maxFrameBytes": 1048576, "jpegQuality": 0.8 },
   "image": { "maxBytes": 10485760, "maxDecodedPixels": 20000000 },
   "video": { "maxBytes": 104857600, "maxDurationSeconds": 300, "maxWidth": 1920, "maxHeight": 1080, "maxFramesPerSecond": 60 },
+  "recognition": { "inputSize": 640, "trackingScoreFloor": 0.10, "nmsIou": 0.45, "acceptedScore": 0.60, "temporalRequired": 3, "temporalWindow": 5, "temporalWindowMs": 2000, "stillScore": 0.75 },
+  "tracking": { "highScore": 0.50, "lowScore": 0.10, "newTrackScore": 0.60, "maxAssociationCost": 0.80, "expiryMs": 2000, "maxTracks": 100, "perClass": true },
+  "ocr": { "maxReadsPerSecond": 1, "maxCropsPerFrame": 4, "minWordConfidence": 70, "consensusSamples": 3, "consensusMatches": 2, "consensusWindowMs": 2000, "stillMaxCrops": 1, "minCropSize": 16, "maxCropEdge": 1600, "unicodeNfkc": true, "caseFoldConsensus": true },
+  "speech": { "maxPending": 3, "maxPendingAgeMs": 5000, "maxTextCharacters": 500, "maxWavDurationMs": 45000, "maxHistory": 200, "queueOverflow": "dropLowestPriorityNewestTie", "categoryPriority": [0, 0, 0, 0, 2, 1, 2, 0] },
+  "lifecycle": { "heartbeatMs": 5000, "leaseMs": 15000, "eventAttachMs": 10000, "resourceFailure": "endSessionNoDiskSpill" },
   "upload": { "maxAttempts": 3 },
   "runtime": { "metricsEnabled": false, "maxRequestBodyBytes": 105906176, "spoolMemoryBytes": 10485760, "sessionTmpfsBytes": 268435456 }
 }

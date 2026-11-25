@@ -19,6 +19,82 @@ bool readBounded(const Json::Value& parent, const char* key, std::uint32_t hardL
     result = value;
     return true;
 }
+
+bool fixedUInt(const Json::Value& parent, const char* key, Json::UInt expected) {
+    return parent.isObject() && parent.isMember(key) && parent[key].isUInt() &&
+           parent[key].asUInt() == expected;
+}
+
+bool fixedDouble(const Json::Value& parent, const char* key, double expected) {
+    return parent.isObject() && parent.isMember(key) && parent[key].isDouble() &&
+           parent[key].asDouble() == expected;
+}
+
+bool fixedText(const Json::Value& parent, const char* key, std::string_view expected) {
+    return parent.isObject() && parent.isMember(key) && parent[key].isString() &&
+           parent[key].asString() == expected;
+}
+
+bool fixedTrue(const Json::Value& parent, const char* key) {
+    return parent.isObject() && parent.isMember(key) && parent[key].isBool() &&
+           parent[key].asBool();
+}
+
+bool fixedRecognitionPolicy(const Json::Value& document) {
+    const auto& camera = document["camera"];
+    const auto& recognition = document["recognition"];
+    const auto& tracking = document["tracking"];
+    return fixedDouble(camera, "jpegQuality", 0.8) &&
+        fixedUInt(recognition, "inputSize", 640) &&
+        fixedDouble(recognition, "trackingScoreFloor", 0.10) &&
+        fixedDouble(recognition, "nmsIou", 0.45) &&
+        fixedDouble(recognition, "acceptedScore", 0.60) &&
+        fixedUInt(recognition, "temporalRequired", 3) &&
+        fixedUInt(recognition, "temporalWindow", 5) &&
+        fixedUInt(recognition, "temporalWindowMs", 2000) &&
+        fixedDouble(recognition, "stillScore", 0.75) &&
+        fixedDouble(tracking, "highScore", 0.50) &&
+        fixedDouble(tracking, "lowScore", 0.10) &&
+        fixedDouble(tracking, "newTrackScore", 0.60) &&
+        fixedDouble(tracking, "maxAssociationCost", 0.80) &&
+        fixedUInt(tracking, "expiryMs", 2000) &&
+        fixedUInt(tracking, "maxTracks", 100) && fixedTrue(tracking, "perClass");
+}
+
+bool fixedOcrPolicy(const Json::Value& document) {
+    const auto& ocr = document["ocr"];
+    return fixedUInt(ocr, "maxReadsPerSecond", 1) &&
+        fixedUInt(ocr, "maxCropsPerFrame", 4) &&
+        fixedUInt(ocr, "minWordConfidence", 70) &&
+        fixedUInt(ocr, "consensusSamples", 3) &&
+        fixedUInt(ocr, "consensusMatches", 2) &&
+        fixedUInt(ocr, "consensusWindowMs", 2000) &&
+        fixedUInt(ocr, "stillMaxCrops", 1) &&
+        fixedUInt(ocr, "minCropSize", 16) &&
+        fixedUInt(ocr, "maxCropEdge", 1600) &&
+        fixedTrue(ocr, "unicodeNfkc") && fixedTrue(ocr, "caseFoldConsensus");
+}
+
+bool fixedSpeechAndLifecyclePolicy(const Json::Value& document) {
+    const auto& speech = document["speech"];
+    const auto& lifecycle = document["lifecycle"];
+    constexpr Json::UInt priorities[] = {0, 0, 0, 0, 2, 1, 2, 0};
+    if (!speech["categoryPriority"].isArray() ||
+        speech["categoryPriority"].size() != std::size(priorities)) return false;
+    for (Json::ArrayIndex index = 0; index < std::size(priorities); ++index)
+        if (!speech["categoryPriority"][index].isUInt() ||
+            speech["categoryPriority"][index].asUInt() != priorities[index]) return false;
+    return fixedUInt(speech, "maxPending", 3) &&
+        fixedUInt(speech, "maxPendingAgeMs", 5000) &&
+        fixedUInt(speech, "maxTextCharacters", 500) &&
+        fixedUInt(speech, "maxWavDurationMs", 45000) &&
+        fixedUInt(speech, "maxHistory", 200) &&
+        fixedText(speech, "queueOverflow", "dropLowestPriorityNewestTie") &&
+        fixedUInt(lifecycle, "heartbeatMs", 5000) &&
+        fixedUInt(lifecycle, "leaseMs", 15000) &&
+        fixedUInt(lifecycle, "eventAttachMs", 10000) &&
+        fixedText(lifecycle, "resourceFailure", "endSessionNoDiskSpill");
+}
 }
 
 std::optional<std::uint32_t> RuntimeConfig::parseUploadAttempts(std::string_view value) {
@@ -96,6 +172,8 @@ std::optional<RuntimeConfig> RuntimeConfig::fromPolicyJson(std::string_view json
         document["upload"]["maxAttempts"].asUInt() > 100 ||
         !runtime.isMember("metricsEnabled") || !runtime["metricsEnabled"].isBool())
         return std::nullopt;
+    if (!fixedRecognitionPolicy(document) || !fixedOcrPolicy(document) ||
+        !fixedSpeechAndLifecyclePolicy(document)) return std::nullopt;
     config.maxUploadAttempts = document["upload"]["maxAttempts"].asUInt();
     config.metricsEnabled = runtime["metricsEnabled"].asBool();
     return config;
