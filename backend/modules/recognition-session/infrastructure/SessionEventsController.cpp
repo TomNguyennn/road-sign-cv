@@ -83,8 +83,9 @@ bool sendEvent(const std::shared_ptr<ResponseStream>& stream, const std::string&
 } // namespace
 
 void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
+                                SessionEventBuffer& events,
                                 const Infrastructure::RuntimeConfig& config) {
-    app.registerHandler("/api/v1/sessions/{1}/events", [&sessions, &config](
+    app.registerHandler("/api/v1/sessions/{1}/events", [&sessions, &events, &config](
         const HttpRequestPtr& request, std::function<void(const HttpResponsePtr&)>&& callback,
         const std::string& id) {
         const auto session = sessions.snapshot();
@@ -110,7 +111,7 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
         readyPayload["state"] = stateName(attached->state);
         readyPayload["audioGeneration"] = attached->audioGeneration;
         auto response = HttpResponse::newAsyncStreamResponse(
-            [&sessions, id, csrf = attached->csrfToken, origin = config.trustedOrigin,
+            [&sessions, &events, id, csrf = attached->csrfToken, origin = config.trustedOrigin,
              readyPayload = std::move(readyPayload), attached = *attached](ResponseStreamPtr stream) {
                 auto streamOwner = std::shared_ptr<ResponseStream>{std::move(stream)};
                 auto eventSeq = std::make_shared<std::uint64_t>();
@@ -127,7 +128,7 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
                     streamOwner->close();
                     return;
                 }
-                *timerId = loop->runEvery(1.0, [&sessions, id, csrf, origin, streamOwner,
+                *timerId = loop->runEvery(1.0, [&sessions, &events, id, csrf, origin, streamOwner,
                                                 previous, eventSeq, timerTick, timerId, loop] {
                     const auto now = std::chrono::steady_clock::now();
                     const auto expiredAdmission = sessions.expireUploadAdmission(now);
@@ -160,6 +161,7 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
                     const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
                         current->heartbeatDeadline - now).count();
                     if (remaining <= 0) {
+                        events.clear(id);
                         Json::Value ended; ended["reason"] = "leaseExpired";
                         static_cast<void>(sendEvent(streamOwner, id, *current, *eventSeq,
                                                     "session.ended", std::move(ended)));
@@ -170,6 +172,7 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
                         return;
                     }
                     if (current->state == State::ending || current->state == State::ended) {
+                        events.clear(id);
                         Json::Value ended; ended["reason"] = "stop";
                         static_cast<void>(sendEvent(streamOwner, id, *current, *eventSeq,
                                                     "session.ended", std::move(ended)));
@@ -208,6 +211,21 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
                         payload["isAudioBlocked"] = false;
                         if (!sendEvent(streamOwner, id, *current, *eventSeq,
                                        "session.state", std::move(payload))) {
+                            static_cast<void>(sessions.beginEnd(id, csrf, origin, now));
+                            static_cast<void>(sessions.completeCleanup(id));
+                            streamOwner->close();
+                            loop->invalidateTimer(*timerId);
+                            return;
+                        }
+                    }
+                    for (auto& event : events.drain(id, current->epoch, current->stateRevision)) {
+                        Entity eventState = *current;
+                        eventState.epoch = event.epoch;
+                        eventState.stateRevision = event.stateRevision;
+                        const char* type = event.kind == BufferedEvent::Kind::audioCancel
+                            ? "audio.cancel" : "frame.result";
+                        if (!sendEvent(streamOwner, id, eventState, *eventSeq,
+                                       type, std::move(event.payload))) {
                             static_cast<void>(sessions.beginEnd(id, csrf, origin, now));
                             static_cast<void>(sessions.completeCleanup(id));
                             streamOwner->close();

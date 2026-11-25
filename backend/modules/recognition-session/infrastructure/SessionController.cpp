@@ -65,6 +65,7 @@ Json::Value uploadSnapshot(const Entity& session) {
 } // namespace
 
 void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
+                           SessionEventBuffer& events,
                            const Infrastructure::RuntimeConfig& config) {
     app.registerHandler("/api/v1/health", [](const HttpRequestPtr&,
         std::function<void(const HttpResponsePtr&)>&& callback) {
@@ -254,6 +255,6 @@ void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
         callback(jsonResponse(uploadSnapshot(*session)));
     }, {Get});
 
-    registerSessionEventRoutes(app, sessions, config);
+    registerSessionEventRoutes(app, sessions, events, config);
 }
 } // namespace RoadSign::RecognitionSession

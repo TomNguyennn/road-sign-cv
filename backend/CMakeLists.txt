@@ -43,6 +43,7 @@ add_test(NAME runtime-foundation COMMAND runtime-foundation-test)
 add_library(recognition-session STATIC
     modules/recognition-session/application/SessionService.cpp
     modules/recognition-session/infrastructure/SessionExecutor.cpp
+    modules/recognition-session/infrastructure/SessionEventBuffer.cpp
     modules/recognition-session/infrastructure/SessionController.cpp
     modules/recognition-session/infrastructure/MediaAdmissionController.cpp
     modules/recognition-session/infrastructure/SessionEventsController.cpp)
@@ -57,6 +58,12 @@ add_executable(session-foundation-test
 target_link_libraries(session-foundation-test PRIVATE recognition-session GTest::gtest_main)
 target_compile_options(session-foundation-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME session-foundation COMMAND session-foundation-test)
+
+add_executable(session-event-buffer-test
+    modules/recognition-session/tests/SessionEventBufferTest.cpp)
+target_link_libraries(session-event-buffer-test PRIVATE recognition-session GTest::gtest_main)
+target_compile_options(session-event-buffer-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME session-event-buffer COMMAND session-event-buffer-test)
 
 add_executable(session-executor-test
     modules/recognition-session/tests/SessionExecutorTest.cpp)

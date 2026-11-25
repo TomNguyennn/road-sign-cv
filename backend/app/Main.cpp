@@ -3,6 +3,7 @@
 #include "modules/recognition-session/application/SessionService.hpp"
 #include "modules/recognition-session/infrastructure/MediaAdmissionController.hpp"
 #include "modules/recognition-session/infrastructure/SessionController.hpp"
+#include "modules/recognition-session/infrastructure/SessionEventBuffer.hpp"
 
 #include <drogon/drogon.h>
 #include <json/json.h>
@@ -42,13 +43,14 @@ int main() {
         return EXIT_FAILURE;
     }
     RecognitionSession::SessionService sessions{config->maxUploadAttempts, config->trustedOrigin};
+    RecognitionSession::SessionEventBuffer events;
     const SessionShutdown sessionShutdown{sessions};
     Json::Value drogonConfig;
     drogonConfig["app"]["upload_path"] = "/run/road-sign";
     drogonConfig["app"]["client_max_body_size"] = kMaxRequestBodySize.data();
     drogonConfig["app"]["client_max_memory_body_size"] = kMaxInMemoryBodySize.data();
     drogon::app().loadConfigJson(std::move(drogonConfig));
-    RecognitionSession::registerSessionRoutes(drogon::app(), sessions, *config);
+    RecognitionSession::registerSessionRoutes(drogon::app(), sessions, events, *config);
     RecognitionSession::registerMediaAdmissionRoutes(drogon::app(), sessions, *config);
     drogon::app().getLoop()->runEvery(1.0, [&sessions] {
         sessions.expireUnattached(std::chrono::steady_clock::now());
