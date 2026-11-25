@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <thread>
 #include <vector>
 
@@ -94,6 +96,32 @@ TEST(SessionFoundationTest, ShutdownReleasesTheOnlySessionLease) {
     EXPECT_FALSE(service.snapshot());
     EXPECT_TRUE(service.create(SourceKind::camera, "https://demo.example",
                                std::chrono::steady_clock::now()).session);
+}
+
+TEST(SessionFoundationTest, ShutdownUnlinksAcceptedTemporaryMedia) {
+    SessionService service{3, "https://demo.example"};
+    const auto now = std::chrono::steady_clock::now();
+    const auto session = service.create(SourceKind::image, "https://demo.example", now).session.value();
+    ASSERT_TRUE(service.attachEvents(session.sessionId, now));
+    const auto path = std::filesystem::temp_directory_path() /
+        ("road-sign-cleanup-" + session.sessionId);
+    {
+        std::ofstream file(path);
+        ASSERT_TRUE(file);
+        file << "test media";
+    }
+    constexpr std::string_view attemptId = "edc6258a-a013-467e-ace1-865af6048911";
+    const auto admission = service.admitUpload(session.sessionId, session.csrfToken,
+        "https://demo.example", 1, std::string{attemptId}, now);
+    ASSERT_TRUE(admission.nonce);
+    ASSERT_TRUE(service.setUploadValidating(session.sessionId, attemptId, *admission.nonce, now));
+    auto media = testImageSource();
+    media.ownedTemporaryFile = std::make_shared<MediaProcessing::OwnedTemporaryFile>(path);
+    ASSERT_TRUE(service.finishUpload(session.sessionId, attemptId, true, std::nullopt,
+                                     std::move(media)));
+    ASSERT_TRUE(std::filesystem::exists(path));
+    service.shutdown();
+    EXPECT_FALSE(std::filesystem::exists(path));
 }
 
 TEST(SessionFoundationTest, HeartbeatRejectsStaleEpoch) {
