@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "classId": 0,
+      "category": "pedestrian-crossing-warning",
+      "spokenName": "Pedestrian crossing warning",
+      "isTextRelevant": false,
+      "priority": 0,
+      "includedVariants": ["UK pedestrian crossing warning signs with the crossing pedestrian symbol"],
+      "excludedVariants": ["Crossing traffic signals", "Zebra crossing road markings", "General pedestrian wayfinding signs"]
+    },
+    {
+      "classId": 1,
+      "category": "children-warning",
+      "spokenName": "Children warning",
+      "isTextRelevant": false,
+      "priority": 0,
+      "includedVariants": ["UK warning signs showing children crossing or nearby"],
+      "excludedVariants": ["School names without the children warning symbol", "Playground advertisements", "Children shown in ordinary photographs"]
+    },
+    {
+      "classId": 2,
+      "category": "roadworks-warning",
+      "spokenName": "Roadworks warning",
+      "isTextRelevant": false,
+      "priority": 0,
+      "includedVariants": ["UK roadworks warning signs showing the worker symbol"],
+      "excludedVariants": ["Construction equipment without a sign", "Unrelated temporary notices", "Roadworks text alone"]
+    },
+    {
+      "classId": 3,
+      "category": "no-pedestrians",
+      "spokenName": "No pedestrians",
+      "isTextRelevant": false,
+      "priority": 0,
+      "includedVariants": ["UK no pedestrians prohibition signs with the pedestrian symbol"],
+      "excludedVariants": ["No entry for vehicles", "Pedestrian zone signs", "Handwritten requests to avoid an area"]
+    },
+    {
+      "classId": 4,
+      "category": "street-name",
+      "spokenName": "Street name",
+      "isTextRelevant": true,
+      "priority": 2,
+      "includedVariants": ["Fixed street-name plates identifying a road, street or lane"],
+      "excludedVariants": ["Shop names", "House numbers alone", "Street names printed only on maps"]
+    },
+    {
+      "classId": 5,
+      "category": "pedestrian-direction",
+      "spokenName": "Pedestrian direction sign",
+      "isTextRelevant": true,
+      "priority": 1,
+      "includedVariants": ["Fixed pedestrian wayfinding signs with destination text and an explicit direction marker"],
+      "excludedVariants": ["Vehicle-only direction signs", "Destination text without a direction marker", "Temporary pedestrian diversion or closure notices"]
+    },
+    {
+      "classId": 6,
+      "category": "bus-stop",
+      "spokenName": "Bus stop",
+      "isTextRelevant": true,
+      "priority": 2,
+      "includedVariants": ["Fixed bus stop identification signs and readable attached stop-name plates"],
+      "excludedVariants": ["Moving buses", "Bus advertisements", "Timetables without a visible bus stop identification sign"]
+    },
+    {
+      "classId": 7,
+      "category": "temporary-pedestrian-notice",
+      "spokenName": "Temporary pedestrian notice",
+      "isTextRelevant": true,
+      "priority": 0,
+      "includedVariants": ["Temporary posted pedestrian closure, diversion or access notices with explicit readable pedestrian wording"],
+      "excludedVariants": ["Fixed pedestrian direction signs", "Generic temporary advertising", "Unreadable or unidentifiable temporary boards"]
+    }
+  ]
+}
