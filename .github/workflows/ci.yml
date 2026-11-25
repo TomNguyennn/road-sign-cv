@@ -29,13 +29,14 @@ jobs:
       - run: uv python install 3.12
       - run: uv venv training/.venv --python 3.12 && uv pip sync training/requirements.lock --python training/.venv/bin/python --require-hashes
       - run: training/.venv/bin/ruff check training && training/.venv/bin/ruff format --check training && training/.venv/bin/mypy training
+      - run: PYTHONPATH=training training/.venv/bin/pytest -q training/tests
       - name: Report deferred suites and release status
         run: |
           {
             echo '### Deferred checks'
-            echo '- Full backend lifecycle, media-admission and event-order contracts: pending T009/T010 and T015-T019 completion.'
+            echo '- Real-model backend recognition contracts: pending T021/T023 and T033.'
             echo '- Playwright accessibility workflows: pending T024.'
-            echo '- Python model/evaluation tests: pending T022.'
+            echo '- Python export/parity and candidate tests: pending T022; dataset/catalogue tests run above.'
             echo '- Release eligible: **false** until the full planned validation and real-model gate pass.'
           } >> "$GITHUB_STEP_SUMMARY"
   native:
