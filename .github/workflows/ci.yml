@@ -135,6 +135,12 @@ jobs:
               assert error.code == 400
           else:
               raise AssertionError("unknown session fields were accepted")
+          try:
+              request("/sessions", "POST", {"sourceKind": "image"}, {"Origin": "https://wrong.example"})
+          except urllib.error.HTTPError as error:
+              assert error.code == 403
+          else:
+              raise AssertionError("wrong-origin session creation was accepted")
           created = request("/sessions", "POST", {"sourceKind": "image"})
           assert created.status == 201
           session = json.loads(created.read())
@@ -162,6 +168,13 @@ jobs:
           else:
               raise AssertionError("second event stream attachment was accepted")
 
+          try:
+              request(f"/sessions/{session_id}/heartbeat", "POST", {"epoch": 2},
+                      {"X-CSRF-Token": csrf})
+          except urllib.error.HTTPError as error:
+              assert error.code == 410
+          else:
+              raise AssertionError("stale heartbeat was accepted")
           heartbeat = request(
               f"/sessions/{session_id}/heartbeat", "POST", {"epoch": 1},
               {"X-CSRF-Token": csrf},
@@ -200,6 +213,19 @@ jobs:
           assert accepted_event["payload"]["uploadAttemptsUsed"] == 2
           status = request(f"/sessions/{session_id}/upload-status", include_origin=False)
           assert json.loads(status.read())["uploadStatus"] == "accepted"
+          try:
+              request(f"/sessions/{session_id}", "DELETE")
+          except urllib.error.HTTPError as error:
+              assert error.code == 403
+          else:
+              raise AssertionError("session deletion without CSRF was accepted")
+          try:
+              request(f"/sessions/{session_id}", "DELETE", {"unexpected": True},
+                      {"X-CSRF-Token": csrf})
+          except urllib.error.HTTPError as error:
+              assert error.code == 400
+          else:
+              raise AssertionError("session deletion with a body was accepted")
           ended = request(f"/sessions/{session_id}", "DELETE", headers={"X-CSRF-Token": csrf})
           assert ended.status == 202
           assert json.loads(ended.read())["stateRevision"] >= session["stateRevision"]
@@ -231,7 +257,8 @@ jobs:
           PY
       - name: Check health and missing-model readiness
         run: |
-          curl --silent --fail --insecure https://localhost:8443/api/v1/capabilities
+          curl --silent --fail --insecure https://localhost:8443/api/v1/capabilities |
+            python3 -c 'import json,sys; assert json.load(sys.stdin)["catalogue"] == []'
           code=$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure https://localhost:8443/api/v1/ready)
           test "$code" = 503
       - if: always()

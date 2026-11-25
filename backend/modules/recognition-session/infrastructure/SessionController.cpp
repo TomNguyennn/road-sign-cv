@@ -83,6 +83,7 @@ void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
         Json::Value body; body["supportedInputs"] = Json::arrayValue;
         body["supportedInputs"].append("camera"); body["supportedInputs"].append("image");
         body["supportedInputs"].append("video"); body["maxUploadAttempts"] = config.maxUploadAttempts;
+        body["catalogue"] = Json::arrayValue;
         body["policyVersion"] = "1";
         body["limits"]["camera"]["maxWidth"] = config.maxCameraWidth;
         body["limits"]["camera"]["maxHeight"] = config.maxCameraHeight;
@@ -161,6 +162,11 @@ void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
                 body["message"] = "Request authentication failed"; body["retryable"] = false;
                 callback(jsonResponse(std::move(body), k403Forbidden)); return;
             }
+            if (!request->body().empty()) {
+                Json::Value body; body["code"] = "INVALID_REQUEST";
+                body["message"] = "Request body is invalid"; body["retryable"] = false;
+                callback(jsonResponse(std::move(body), k400BadRequest)); return;
+            }
             const auto stateRevision = sessions.beginEnd(
                 id, csrf, origin, std::chrono::steady_clock::now());
             if (!stateRevision) {
@@ -211,11 +217,16 @@ void registerSessionRoutes(HttpAppFramework& app, SessionService& sessions,
             body["message"] = "Heartbeat body is invalid"; body["retryable"] = false;
             callback(jsonResponse(std::move(body), k400BadRequest)); return;
         }
-        if (!sessions.heartbeat(id, csrf, origin, (*json)["epoch"].asUInt(),
-                                std::chrono::steady_clock::now())) {
+        if (!sessions.authenticate(id, csrf, origin)) {
             Json::Value body; body["code"] = "FORBIDDEN";
             body["message"] = "Request authentication failed"; body["retryable"] = false;
             callback(jsonResponse(std::move(body), k403Forbidden)); return;
+        }
+        if (!sessions.heartbeat(id, csrf, origin, (*json)["epoch"].asUInt(),
+                                std::chrono::steady_clock::now())) {
+            Json::Value body; body["code"] = "STALE_EPOCH";
+            body["message"] = "Session epoch or lease is expired"; body["retryable"] = false;
+            callback(jsonResponse(std::move(body), k410Gone)); return;
         }
         auto response = HttpResponse::newHttpResponse();
         response->setStatusCode(k204NoContent);
