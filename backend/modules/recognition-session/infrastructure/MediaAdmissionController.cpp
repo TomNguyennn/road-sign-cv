@@ -1,16 +1,15 @@
 #include "MediaAdmissionController.hpp"
+#include "../../media-processing/public/OpenCvImageClient.hpp"
 
 #include <drogon/HttpResponse.h>
 #include <drogon/MultiPart.h>
 
-#include <opencv2/imgcodecs.hpp>
 #include <opencv2/videoio.hpp>
 #include <uuid/uuid.h>
 
 #include <array>
 #include <charconv>
 #include <cctype>
-#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -20,7 +19,6 @@
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <vector>
 
 namespace RoadSign::RecognitionSession {
 namespace {
@@ -133,92 +131,18 @@ std::string uuid() {
     return output;
 }
 
-std::uint32_t readBigEndian(const unsigned char* value) {
-    return (static_cast<std::uint32_t>(value[0]) << 24U) |
-           (static_cast<std::uint32_t>(value[1]) << 16U) |
-           (static_cast<std::uint32_t>(value[2]) << 8U) |
-           static_cast<std::uint32_t>(value[3]);
-}
-
-std::optional<cv::Size> pngSize(std::string_view bytes) {
-    constexpr std::array<unsigned char, 8> signature{137, 80, 78, 71, 13, 10, 26, 10};
-    if (bytes.size() < 24 || std::memcmp(bytes.data(), signature.data(), signature.size()) != 0 ||
-        bytes.substr(12, 4) != "IHDR") return std::nullopt;
-    const auto* data = reinterpret_cast<const unsigned char*>(bytes.data() + 16);
-    const auto width = readBigEndian(data);
-    const auto height = readBigEndian(data + 4);
-    if (width == 0 || height == 0 || width > static_cast<std::uint32_t>(INT_MAX) ||
-        height > static_cast<std::uint32_t>(INT_MAX)) return std::nullopt;
-    return cv::Size{static_cast<int>(width), static_cast<int>(height)};
-}
-
-bool isJpegStart(std::string_view bytes) {
-    return bytes.size() >= 3 && static_cast<unsigned char>(bytes[0]) == 0xFF &&
-           static_cast<unsigned char>(bytes[1]) == 0xD8 &&
-           static_cast<unsigned char>(bytes[2]) == 0xFF;
-}
-
-bool isJpegStartOfFrame(unsigned char marker) {
-    switch (marker) {
-    case 0xC0: case 0xC1: case 0xC2: case 0xC3:
-    case 0xC5: case 0xC6: case 0xC7:
-    case 0xC9: case 0xCA: case 0xCB:
-    case 0xCD: case 0xCE: case 0xCF: return true;
-    default: return false;
-    }
-}
-
-std::optional<cv::Size> jpegSize(std::string_view bytes) {
-    if (!isJpegStart(bytes)) return std::nullopt;
-    std::size_t offset = 2;
-    while (offset + 4 <= bytes.size()) {
-        if (static_cast<unsigned char>(bytes[offset]) != 0xFF) return std::nullopt;
-        while (offset < bytes.size() && static_cast<unsigned char>(bytes[offset]) == 0xFF) ++offset;
-        if (offset >= bytes.size()) return std::nullopt;
-        const auto marker = static_cast<unsigned char>(bytes[offset++]);
-        if (marker == 0xD8 || marker == 0xD9 || marker == 0x01 ||
-            (marker >= 0xD0 && marker <= 0xD7)) continue;
-        if (offset + 2 > bytes.size()) return std::nullopt;
-        const auto segmentLength = static_cast<std::size_t>(
-            (static_cast<unsigned char>(bytes[offset]) << 8U) |
-            static_cast<unsigned char>(bytes[offset + 1]));
-        if (segmentLength < 2 || segmentLength > bytes.size() - offset) return std::nullopt;
-        if (isJpegStartOfFrame(marker)) {
-            if (segmentLength < 7) return std::nullopt;
-            const auto* data = reinterpret_cast<const unsigned char*>(bytes.data() + offset + 2);
-            const auto height = static_cast<std::uint32_t>((data[1] << 8U) | data[2]);
-            const auto width = static_cast<std::uint32_t>((data[3] << 8U) | data[4]);
-            if (width == 0 || height == 0) return std::nullopt;
-            return cv::Size{static_cast<int>(width), static_cast<int>(height)};
-        }
-        offset += segmentLength;
-    }
-    return std::nullopt;
-}
-
-bool withinImagePolicy(cv::Size size, std::uint32_t maxDecodedPixels) {
-    return size.width > 0 && size.height > 0 &&
-        static_cast<std::uint64_t>(size.width) * static_cast<std::uint64_t>(size.height) <=
-            maxDecodedPixels;
-}
-
 std::optional<MediaProcessing::MediaSource> validateImage(
     const drogon::HttpFile& file, const Infrastructure::RuntimeConfig& config,
     const std::shared_ptr<const MediaProcessing::OwnedTemporaryFile>& ownedFile) {
-    if (file.fileLength() == 0 || file.fileLength() > config.maxImageBytes) return std::nullopt;
-    const auto bytes = file.fileContent();
-    auto originalSize = pngSize(bytes);
-    if (!originalSize) originalSize = jpegSize(bytes);
-    if (!originalSize || !withinImagePolicy(*originalSize, config.maxDecodedPixels))
-        return std::nullopt;
-    const auto* data = reinterpret_cast<const unsigned char*>(bytes.data());
-    const std::vector<unsigned char> encoded(data, data + bytes.size());
-    const auto decoded = cv::imdecode(encoded, cv::IMREAD_COLOR);
-    if (decoded.empty() || !withinImagePolicy(decoded.size(), config.maxDecodedPixels))
-        return std::nullopt;
+    const MediaProcessing::ImageLimits limits{
+        config.maxImageBytes, config.maxDecodedPixels,
+        config.maxDecodedPixels, config.maxDecodedPixels};
+    const auto decoded = MediaProcessing::OpenCvImageClient::decode(
+        file.fileContent(), MediaProcessing::SourceKind::image, limits);
+    if (!decoded) return std::nullopt;
     return MediaProcessing::MediaSource{
         MediaProcessing::SourceKind::image,
-        static_cast<std::uint32_t>(decoded.cols), static_cast<std::uint32_t>(decoded.rows),
+        decoded->size.width, decoded->size.height,
         std::nullopt, std::nullopt, ownedFile};
 }
 
@@ -380,7 +304,7 @@ void registerMediaAdmissionRoutes(HttpAppFramework& app, SessionService& session
         const auto& file = parser.getFiles().front();
         if (session->sourceKind == SourceKind::image) {
             const auto bytes = file.fileContent();
-            const auto suffix = pngSize(bytes) ? ".png" : ".jpg";
+            const auto suffix = MediaProcessing::OpenCvImageClient::isPng(bytes) ? ".png" : ".jpg";
             auto ownedFile = saveTemporaryMedia(file, suffix);
             if (!ownedFile) {
                 callback(uploadError(sessions, id, attemptId, "UPLOAD_STORAGE_FAILED",

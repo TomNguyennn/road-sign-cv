@@ -40,6 +40,12 @@ target_link_libraries(runtime-foundation-test PRIVATE GTest::gtest_main road-sig
 target_compile_options(runtime-foundation-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME runtime-foundation COMMAND runtime-foundation-test)
 
+add_library(media-processing STATIC
+    modules/media-processing/infrastructure/OpenCvImageClient.cpp)
+target_include_directories(media-processing PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(media-processing PUBLIC opencv_core opencv_imgproc opencv_imgcodecs)
+target_compile_options(media-processing PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
 add_library(recognition-session STATIC
     modules/recognition-session/application/SessionService.cpp
     modules/recognition-session/infrastructure/SessionExecutor.cpp
@@ -51,7 +57,7 @@ target_include_directories(recognition-session PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/modules/recognition-session/application"
     "${CMAKE_CURRENT_SOURCE_DIR}/modules/recognition-session/domain")
-target_link_libraries(recognition-session PRIVATE uuid opencv_imgcodecs opencv_videoio PUBLIC Drogon::Drogon)
+target_link_libraries(recognition-session PRIVATE uuid opencv_videoio media-processing PUBLIC Drogon::Drogon)
 target_compile_options(recognition-session PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_executable(session-foundation-test
     modules/recognition-session/tests/SessionFoundationTest.cpp)
@@ -70,6 +76,11 @@ add_executable(session-executor-test
 target_link_libraries(session-executor-test PRIVATE recognition-session GTest::gtest_main)
 target_compile_options(session-executor-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME session-executor COMMAND session-executor-test)
+
+add_executable(native-recognition-test tests/integration/NativeRecognitionTest.cpp)
+target_link_libraries(native-recognition-test PRIVATE media-processing GTest::gtest_main)
+target_compile_options(native-recognition-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME native-recognition COMMAND native-recognition-test)
 
 add_executable(road-sign-server app/Main.cpp)
 target_include_directories(road-sign-server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
