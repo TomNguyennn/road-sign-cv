@@ -10,8 +10,12 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -166,5 +170,24 @@ TEST(RuntimeFoundationTest, PolicyAcceptsConfiguredDefaultsAndRejectsEnlargedHar
 TEST(RuntimeFoundationTest, LoggerOnlyExposesFixedEventNames) {
     EXPECT_EQ(Infrastructure::eventName(Infrastructure::Event::requestRejected), "request.rejected");
     EXPECT_EQ(Infrastructure::eventName(Infrastructure::Event::sessionCreated), "session.created");
+    std::ostringstream output;
+    auto* previous = std::clog.rdbuf(output.rdbuf());
+    Infrastructure::logEvent(Infrastructure::Event::requestRejected);
+    std::clog.rdbuf(previous);
+    EXPECT_EQ(output.str(), "{\"event\":\"request.rejected\"}\n");
+}
+
+TEST(RuntimeFoundationTest, TemporaryMediaOwnerUnlinksItsSpool) {
+    const auto path = std::filesystem::temp_directory_path() / "road-sign-runtime-spool-test";
+    {
+        std::ofstream file(path);
+        ASSERT_TRUE(file);
+        file << "test media";
+    }
+    {
+        MediaProcessing::OwnedTemporaryFile owner{path};
+        ASSERT_TRUE(std::filesystem::exists(path));
+    }
+    EXPECT_FALSE(std::filesystem::exists(path));
 }
 } // namespace RoadSign

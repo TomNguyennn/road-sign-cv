@@ -135,6 +135,19 @@ TEST(SessionFoundationTest, HeartbeatRejectsStaleEpoch) {
                                   1, now + std::chrono::seconds{5}));
 }
 
+TEST(SessionFoundationTest, HeartbeatExtendsLeaseButCannotReviveAnExpiredSession) {
+    SessionService service{3, "https://demo.example"};
+    const auto now = std::chrono::steady_clock::now();
+    const auto session = service.create(SourceKind::camera, "https://demo.example", now).session.value();
+    ASSERT_TRUE(service.attachEvents(session.sessionId, now));
+    EXPECT_TRUE(service.heartbeat(session.sessionId, session.csrfToken, "https://demo.example",
+                                  1, now + std::chrono::seconds{14}));
+    EXPECT_TRUE(service.heartbeat(session.sessionId, session.csrfToken, "https://demo.example",
+                                  1, now + std::chrono::seconds{28}));
+    EXPECT_FALSE(service.heartbeat(session.sessionId, session.csrfToken, "https://demo.example",
+                                   1, now + std::chrono::seconds{43}));
+}
+
 TEST(SessionFoundationTest, AdmissionBindsOwnerEpochNonceAndRetryBudget) {
     SessionService service{2, "https://demo.example"};
     const auto now = std::chrono::steady_clock::now();

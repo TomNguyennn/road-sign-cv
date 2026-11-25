@@ -156,6 +156,14 @@ jobs:
               assert error.code == 404
           else:
               raise AssertionError("another client read the upload receipt")
+          try:
+              other_client.open(urllib.request.Request(
+                  base + f"/sessions/{session_id}/upload-status",
+                  headers={"Cookie": "rs_session=wrong-client"}), timeout=10)
+          except urllib.error.HTTPError as error:
+              assert error.code == 404
+          else:
+              raise AssertionError("wrong-cookie client read the upload receipt")
 
           events = request(f"/sessions/{session_id}/events", headers={"Accept": "text/event-stream"}, include_origin=False)
           assert events.readline().strip() == b"event: session.ready"
@@ -184,7 +192,8 @@ jobs:
           assert json.loads(status.read())["uploadStatus"] == "idle"
           first_attempt = "edc6258a-a013-467e-ace1-865af6048911"
           try:
-              upload(f"/sessions/{session_id}/media", first_attempt, b"invalid image").close()
+              upload(f"/sessions/{session_id}/media", first_attempt,
+                     b"RS_PRIVACY_CANARY_DO_NOT_LOG").close()
           except urllib.error.HTTPError as error:
               assert error.code == 422
           else:
@@ -254,7 +263,40 @@ jobs:
           assert replacement_session["sessionId"] != unattached_id
           assert request(f"/sessions/{replacement_session['sessionId']}", "DELETE",
                          headers={"X-CSRF-Token": replacement_session["csrfToken"]}).status == 202
+
+          leased = request("/sessions", "POST", {"sourceKind": "camera"})
+          lease_id = json.loads(leased.read())["sessionId"]
+          lease_events = request(f"/sessions/{lease_id}/events",
+                                 headers={"Accept": "text/event-stream"}, include_origin=False)
+          lease_events.fp.raw._sock.settimeout(20)
+          heartbeats = 0
+          last_sequence = 0
+          while True:
+              raw_line = lease_events.readline()
+              assert raw_line, "event stream closed before lease expiry"
+              event_line = raw_line.strip()
+              if not event_line:
+                  continue
+              assert event_line.startswith(b"event: ")
+              data_line = lease_events.readline()
+              assert data_line.startswith(b"data: ")
+              envelope = json.loads(data_line[6:])
+              assert envelope["eventSeq"] > last_sequence
+              last_sequence = envelope["eventSeq"]
+              if event_line == b"event: heartbeat":
+                  heartbeats += 1
+              if event_line == b"event: session.ended":
+                  assert envelope["payload"]["reason"] == "leaseExpired"
+                  break
+          assert heartbeats >= 2
+          lease_events.close()
           PY
+      - name: Check session spool and log privacy
+        run: |
+          docker compose --env-file config/demo.env.example exec -T backend sh -c 'test -z "$(find /run/road-sign -type f -print -quit)"'
+          if docker compose --env-file config/demo.env.example logs backend | grep -F 'RS_PRIVACY_CANARY_DO_NOT_LOG'; then
+            exit 1
+          fi
       - name: Check health and missing-model readiness
         run: |
           curl --silent --fail --insecure https://localhost:8443/api/v1/capabilities |
