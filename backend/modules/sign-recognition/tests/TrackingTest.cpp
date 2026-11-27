@@ -51,6 +51,9 @@ TEST(TrackingTest, StillImageStartsConfirmedAndTextRevisionNeedsSubstantiveChang
     EXPECT_EQ(*track->acceptedText(), "High Street");
     EXPECT_TRUE(track->acceptText("Broad Street", "broad street"));
     EXPECT_EQ(track->revision(), 3U);
+    auto uncertain = observation(1, 4, 0, 0);
+    uncertain.confidence = 0.74;
+    EXPECT_FALSE(TrackedSign::start("session", 1, 2, uncertain, FRAME_SIZE, true));
 }
 
 TEST(TrackingTest, PredictsMotionUsingElapsedSourceTime) {

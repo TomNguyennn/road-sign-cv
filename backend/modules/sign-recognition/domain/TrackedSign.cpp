@@ -11,6 +11,7 @@ constexpr double REACQUISITION_WINDOW_MS = 2000.0;
 constexpr double MAX_ASSOCIATION_COST = 0.80;
 constexpr std::size_t MAX_DETECTION_HISTORY = 5;
 constexpr std::size_t MAX_OCR_HISTORY = 3;
+constexpr double MIN_STILL_SCORE = 0.75;
 constexpr std::uint32_t STREET_NAME_CATEGORY_ID = 4;
 constexpr std::uint32_t BUS_STOP_CATEGORY_ID = 6;
 
@@ -37,6 +38,7 @@ std::optional<TrackedSign> TrackedSign::start(
     std::string sessionId, std::uint32_t epoch, std::uint64_t localId,
     const SignObservation& observation, ImageSize frameSize, bool isStillImage) {
     if (sessionId.empty() || epoch == 0 || localId == 0 ||
+        (isStillImage && observation.confidence < MIN_STILL_SCORE) ||
         !observation.isValid(epoch, epoch, frameSize)) return std::nullopt;
     auto trackId = sessionId + "/" + std::to_string(epoch) + "/" +
         std::to_string(observation.categoryId) + "/" + std::to_string(localId);
