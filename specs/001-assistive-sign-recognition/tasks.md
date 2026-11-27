@@ -195,16 +195,9 @@ capture or speech. Backend controls can be tested with deterministic audio obser
 
 ### Tests for User Story 3
 
-- [X] T059 [P] [US3] Write backend audio-control tests in `backend/modules/recognition-session/tests/AudioControlsTest.cpp` for mute/generation changes, unmute without backlog, empty/muted repeat, blocked activation, stale acknowledgments and missing-cancel-ack session termination. Test acknowledgments for cutoff k after generation k+1, cancel-all behavior, latest completed receipt replay and unknown/superseded IDs, plus first-image recovery without any started history.
-- [X] T060 [P] [US3] Write state/playback race tests in `frontend/src/modules/audio-feedback/AudioPlaybackService.test.ts` for immediate mute/stop, rapid mute-unmute intent ordering, expired GET validity, superseded fetches and no playback-slot reuse before confirmed cancellation. Test Read latest result after initial audio rejection, stale descriptionId, coalesced recovery clicks and barrier acknowledgment independent of epoch filtering. Cover repeat/recovery after track removal and history truncation with null source IDs; verify finite manual-offer expiry and no accidental overlay/timing updates.
-- [X] T061 [P] [US3] Write keyboard/focus/status and recovery tests in `frontend/tests/e2e/AccessibleControls.spec.ts` for every control, hidden visuals, non-live transcripts, denial/revocation, malformed uploads, EventSource failure, hidden-page cleanup and no automatic resume.
-
-T059–T061 test-first evidence (2026-11-27): C++ syntax checking stops at the not-yet-implemented
-`ControlAudioUseCase.hpp`; Vitest and TypeScript stop at the not-yet-implemented
-`AudioPlaybackService.ts`; Chromium reaches the local page and fails its first control assertion
-because the current placeholder has no input selector. Playwright discovers all 27 cases across
-Chromium, Firefox and WebKit. The existing App unit test and e2e file lint pass. These checkboxes
-record authored red tests; behavioral pass and full browser execution remain with T062–T070.
+- [ ] T059 [P] [US3] Write backend audio-control tests in `backend/modules/recognition-session/tests/AudioControlsTest.cpp` for mute/generation changes, unmute without backlog, empty/muted repeat, blocked activation, stale acknowledgments and missing-cancel-ack session termination. Test acknowledgments for cutoff k after generation k+1, cancel-all behavior, latest completed receipt replay and unknown/superseded IDs, plus first-image recovery without any started history.
+- [ ] T060 [P] [US3] Write state/playback race tests in `frontend/src/modules/audio-feedback/AudioPlaybackService.test.ts` for immediate mute/stop, rapid mute-unmute intent ordering, expired GET validity, superseded fetches and no playback-slot reuse before confirmed cancellation. Test Read latest result after initial audio rejection, stale descriptionId, coalesced recovery clicks and barrier acknowledgment independent of epoch filtering. Cover repeat/recovery after track removal and history truncation with null source IDs; verify finite manual-offer expiry and no accidental overlay/timing updates.
+- [ ] T061 [P] [US3] Write keyboard/focus/status and recovery tests in `frontend/tests/e2e/AccessibleControls.spec.ts` for every control, hidden visuals, non-live transcripts, denial/revocation, malformed uploads, EventSource failure, hidden-page cleanup and no automatic resume.
 
 ### Implementation for User Story 3
 
