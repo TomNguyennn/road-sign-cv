@@ -92,6 +92,16 @@ target_link_libraries(obstacle-announcement-test PRIVATE announcements GTest::gt
 target_compile_options(obstacle-announcement-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME obstacle-announcement COMMAND obstacle-announcement-test)
 
+add_library(sign-recognition STATIC
+    modules/sign-recognition/domain/TrackedSign.cpp)
+target_include_directories(sign-recognition PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_options(sign-recognition PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_executable(tracking-test
+    modules/sign-recognition/tests/TrackingTest.cpp)
+target_link_libraries(tracking-test PRIVATE sign-recognition GTest::gtest_main)
+target_compile_options(tracking-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME tracking COMMAND tracking-test)
+
 add_executable(road-sign-server app/Main.cpp)
 target_include_directories(road-sign-server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(road-sign-server PRIVATE recognition-session road-sign-runtime-config Drogon::Drogon)
