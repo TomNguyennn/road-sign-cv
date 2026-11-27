@@ -136,7 +136,9 @@ def assign_grouped_splits(scenes: Sequence[Mapping[str, object]]) -> dict[str, s
 def parse_annotation(
     value: object, width: int, height: int, media_kind: str, categories: tuple[str, ...]
 ) -> Annotation:
-    item = require_object(value, {"classId", "category", "box", "transcript", "trackId"}, "annotation")
+    item = require_object(
+        value, {"classId", "category", "box", "transcript", "trackId"}, "annotation"
+    )
     class_id = item["classId"]
     if (
         isinstance(class_id, bool)
