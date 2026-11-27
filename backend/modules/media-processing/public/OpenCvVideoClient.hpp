@@ -3,8 +3,6 @@
 #include "MediaSource.hpp"
 #include "OpenCvImageClient.hpp"
 
-#include <opencv2/videoio.hpp>
-
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -27,16 +25,21 @@ struct DecodedVideoFrame {
 
 class OpenCvVideoClient {
 public:
+    ~OpenCvVideoClient();
+    OpenCvVideoClient(const OpenCvVideoClient&) = delete;
+    OpenCvVideoClient& operator=(const OpenCvVideoClient&) = delete;
     [[nodiscard]] static std::unique_ptr<OpenCvVideoClient> open(
         const MediaSource& source, const std::filesystem::path& spoolRoot, VideoLimits limits);
 
     [[nodiscard]] std::optional<DecodedVideoFrame> nextSample(std::uint64_t minimumSourceTimeMs);
     [[nodiscard]] bool seek(std::uint64_t positionMs);
+    [[nodiscard]] bool hasFailed() const noexcept { return isFailed_; }
 
 private:
-    OpenCvVideoClient(cv::VideoCapture capture, MediaSource source);
+    struct State;
+    OpenCvVideoClient(std::unique_ptr<State> state, MediaSource source);
 
-    cv::VideoCapture capture_;
+    std::unique_ptr<State> state_;
     MediaSource source_;
     std::uint64_t nextFrameId_{1};
     std::optional<std::uint64_t> lastDecodedTimeMs_;

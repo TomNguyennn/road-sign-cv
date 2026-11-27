@@ -4,6 +4,7 @@
 #include "modules/recognition-session/infrastructure/MediaAdmissionController.hpp"
 #include "modules/recognition-session/infrastructure/SessionController.hpp"
 #include "modules/recognition-session/infrastructure/SessionEventBuffer.hpp"
+#include "modules/recognition-session/infrastructure/VideoController.hpp"
 
 #include <drogon/drogon.h>
 #include <json/json.h>
@@ -52,6 +53,7 @@ int main() {
     drogon::app().loadConfigJson(std::move(drogonConfig));
     RecognitionSession::registerSessionRoutes(drogon::app(), sessions, events, *config);
     RecognitionSession::registerMediaAdmissionRoutes(drogon::app(), sessions, *config);
+    RecognitionSession::registerVideoRoutes(drogon::app(), sessions, *config);
     drogon::app().getLoop()->runEvery(1.0, [&sessions] {
         sessions.expireUnattached(std::chrono::steady_clock::now());
     });

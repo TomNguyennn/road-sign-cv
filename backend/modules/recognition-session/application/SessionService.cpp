@@ -7,6 +7,7 @@
 #include <array>
 #include <cctype>
 #include <cerrno>
+#include <limits>
 #include <stdexcept>
 
 namespace RoadSign::RecognitionSession {
@@ -182,6 +183,57 @@ bool SessionService::finishStillImage(std::string_view sessionId) {
     active_->state = State::reviewing;
     ++active_->stateRevision;
     return true;
+}
+
+bool SessionService::advanceVideoPosition(std::string_view sessionId, std::uint32_t epoch,
+                                          std::uint64_t positionMs) {
+    std::lock_guard lock(mutex_);
+    if (!active_ || active_->sessionId != sessionId || active_->epoch != epoch ||
+        active_->sourceKind != SourceKind::video || active_->state != State::processing ||
+        !active_->acceptedMedia || !active_->acceptedMedia->durationMs ||
+        !active_->acceptedMedia->positionMs ||
+        positionMs >= *active_->acceptedMedia->durationMs ||
+        positionMs < *active_->acceptedMedia->positionMs) {
+        return false;
+    }
+    active_->acceptedMedia->positionMs = positionMs;
+    return true;
+}
+
+bool SessionService::finishVideo(std::string_view sessionId, std::uint32_t epoch) {
+    std::lock_guard lock(mutex_);
+    if (!active_ || active_->sessionId != sessionId || active_->epoch != epoch ||
+        active_->sourceKind != SourceKind::video || active_->state != State::processing ||
+        !active_->acceptedMedia || !active_->acceptedMedia->durationMs) {
+        return false;
+    }
+    active_->acceptedMedia->positionMs = active_->acceptedMedia->durationMs;
+    active_->state = State::reviewing;
+    ++active_->stateRevision;
+    return true;
+}
+
+std::optional<Entity> SessionService::seekVideo(
+    std::string_view sessionId, std::string_view csrfToken, std::string_view origin,
+    std::uint32_t expectedEpoch, std::uint64_t positionMs) {
+    std::lock_guard lock(mutex_);
+    if (!authenticateLocked(sessionId, csrfToken, origin) ||
+        active_->sourceKind != SourceKind::video || !active_->hasAcceptedUpload ||
+        (active_->state != State::processing && active_->state != State::reviewing) ||
+        active_->epoch != expectedEpoch || !active_->acceptedMedia ||
+        !active_->acceptedMedia->durationMs ||
+        positionMs >= *active_->acceptedMedia->durationMs ||
+        active_->epoch == std::numeric_limits<std::uint32_t>::max() ||
+        active_->audioGeneration == std::numeric_limits<std::uint32_t>::max() ||
+        active_->stateRevision == std::numeric_limits<std::uint64_t>::max()) {
+        return std::nullopt;
+    }
+    ++active_->epoch;
+    ++active_->audioGeneration;
+    ++active_->stateRevision;
+    active_->state = State::processing;
+    active_->acceptedMedia->positionMs = positionMs;
+    return active_;
 }
 
 UploadAdmissionResult SessionService::admitUpload(

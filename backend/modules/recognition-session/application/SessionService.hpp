@@ -58,6 +58,12 @@ public:
                                        std::uint32_t audioGeneration) const;
     [[nodiscard]] bool beginProcessing(std::string_view sessionId);
     [[nodiscard]] bool finishStillImage(std::string_view sessionId);
+    [[nodiscard]] bool advanceVideoPosition(std::string_view sessionId, std::uint32_t epoch,
+                                            std::uint64_t positionMs);
+    [[nodiscard]] bool finishVideo(std::string_view sessionId, std::uint32_t epoch);
+    [[nodiscard]] std::optional<Entity> seekVideo(
+        std::string_view sessionId, std::string_view csrfToken, std::string_view origin,
+        std::uint32_t expectedEpoch, std::uint64_t positionMs);
     [[nodiscard]] UploadAdmissionResult admitUpload(
         std::string_view sessionId, std::string_view csrfToken, std::string_view origin,
         std::uint32_t epoch, std::string uploadAttemptId,

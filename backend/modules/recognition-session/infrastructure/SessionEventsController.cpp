@@ -200,15 +200,27 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
                             return;
                         }
                     }
-                    const bool stateChanged = current->stateRevision != previous->stateRevision &&
-                        (current->epoch != previous->epoch || current->state != previous->state ||
-                         current->audioGeneration != previous->audioGeneration ||
-                         current->isMuted != previous->isMuted);
+                    const bool hasVideoProgress = current->sourceKind == SourceKind::video &&
+                        current->acceptedMedia && previous->acceptedMedia &&
+                        current->acceptedMedia->positionMs != previous->acceptedMedia->positionMs;
+                    const bool stateChanged = hasVideoProgress ||
+                        (current->stateRevision != previous->stateRevision &&
+                         (current->epoch != previous->epoch || current->state != previous->state ||
+                          current->audioGeneration != previous->audioGeneration ||
+                          current->isMuted != previous->isMuted));
                     if (stateChanged) {
                         Json::Value payload; payload["state"] = stateName(current->state);
                         payload["audioGeneration"] = current->audioGeneration;
                         payload["isMuted"] = current->isMuted;
                         payload["isAudioBlocked"] = false;
+                        if (current->sourceKind == SourceKind::video && current->acceptedMedia) {
+                            if (current->acceptedMedia->positionMs)
+                                payload["sourceTimeMs"] =
+                                    Json::UInt64{*current->acceptedMedia->positionMs};
+                            if (current->acceptedMedia->durationMs)
+                                payload["durationMs"] =
+                                    Json::UInt64{*current->acceptedMedia->durationMs};
+                        }
                         if (!sendEvent(streamOwner, id, *current, *eventSeq,
                                        "session.state", std::move(payload))) {
                             static_cast<void>(sessions.beginEnd(id, csrf, origin, now));

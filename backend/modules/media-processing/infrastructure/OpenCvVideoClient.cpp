@@ -1,6 +1,7 @@
 #include "modules/media-processing/public/OpenCvVideoClient.hpp"
 
 #include <opencv2/imgproc.hpp>
+#include <opencv2/videoio.hpp>
 
 #include <array>
 #include <cctype>
@@ -85,8 +86,15 @@ bool hasValidMetadata(const cv::VideoCapture& capture, const MediaSource& source
 }
 } // namespace
 
-OpenCvVideoClient::OpenCvVideoClient(cv::VideoCapture capture, MediaSource source)
-    : capture_(std::move(capture)), source_(std::move(source)) {}
+struct OpenCvVideoClient::State {
+    explicit State(cv::VideoCapture capture) : capture(std::move(capture)) {}
+    cv::VideoCapture capture;
+};
+
+OpenCvVideoClient::OpenCvVideoClient(std::unique_ptr<State> state, MediaSource source)
+    : state_(std::move(state)), source_(std::move(source)) {}
+
+OpenCvVideoClient::~OpenCvVideoClient() = default;
 
 std::unique_ptr<OpenCvVideoClient> OpenCvVideoClient::open(
     const MediaSource& source, const std::filesystem::path& spoolRoot, VideoLimits limits) {
@@ -102,15 +110,15 @@ std::unique_ptr<OpenCvVideoClient> OpenCvVideoClient::open(
         return nullptr;
     }
     return std::unique_ptr<OpenCvVideoClient>(
-        new OpenCvVideoClient(std::move(capture), source));
+        new OpenCvVideoClient(std::make_unique<State>(std::move(capture)), source));
 }
 
 std::optional<DecodedVideoFrame> OpenCvVideoClient::nextSample(
     std::uint64_t minimumSourceTimeMs) {
-    if (isFailed_ || !capture_.isOpened()) return std::nullopt;
+    if (isFailed_ || !state_->capture.isOpened()) return std::nullopt;
     cv::Mat bgr;
-    while (capture_.read(bgr)) {
-        const double timestamp = capture_.get(cv::CAP_PROP_POS_MSEC);
+    while (state_->capture.read(bgr)) {
+        const double timestamp = state_->capture.get(cv::CAP_PROP_POS_MSEC);
         if (bgr.empty() || bgr.cols != static_cast<int>(source_.width) ||
             bgr.rows != static_cast<int>(source_.height) || !std::isfinite(timestamp) ||
             timestamp < 0 || timestamp > static_cast<double>(*source_.durationMs) + 1000.0) {
@@ -147,7 +155,7 @@ std::optional<DecodedVideoFrame> OpenCvVideoClient::nextSample(
 
 bool OpenCvVideoClient::seek(std::uint64_t positionMs) {
     if (!source_.durationMs || positionMs >= *source_.durationMs ||
-        !capture_.set(cv::CAP_PROP_POS_MSEC, static_cast<double>(positionMs))) {
+        !state_->capture.set(cv::CAP_PROP_POS_MSEC, static_cast<double>(positionMs))) {
         return false;
     }
     lastDecodedTimeMs_.reset();

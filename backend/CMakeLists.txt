@@ -49,11 +49,13 @@ target_compile_options(media-processing PRIVATE -Wall -Wextra -Wpedantic -Werror
 
 add_library(recognition-session STATIC
     modules/recognition-session/application/SessionService.cpp
+    modules/recognition-session/application/ProcessVideoUseCase.cpp
     modules/recognition-session/infrastructure/SessionExecutor.cpp
     modules/recognition-session/infrastructure/SessionEventBuffer.cpp
     modules/recognition-session/infrastructure/SessionController.cpp
     modules/recognition-session/infrastructure/MediaAdmissionController.cpp
-    modules/recognition-session/infrastructure/SessionEventsController.cpp)
+    modules/recognition-session/infrastructure/SessionEventsController.cpp
+    modules/recognition-session/infrastructure/VideoController.cpp)
 target_include_directories(recognition-session PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/modules/recognition-session/application"
@@ -65,6 +67,11 @@ add_executable(session-foundation-test
 target_link_libraries(session-foundation-test PRIVATE recognition-session GTest::gtest_main)
 target_compile_options(session-foundation-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME session-foundation COMMAND session-foundation-test)
+add_executable(video-recognition-contract-test
+    tests/integration/VideoRecognitionContractTest.cpp)
+target_link_libraries(video-recognition-contract-test PRIVATE recognition-session GTest::gtest_main)
+target_compile_options(video-recognition-contract-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME video-recognition-contract COMMAND video-recognition-contract-test)
 
 add_executable(session-event-buffer-test
     modules/recognition-session/tests/SessionEventBufferTest.cpp)
@@ -126,6 +133,15 @@ add_executable(bytetrack-client-test
 target_link_libraries(bytetrack-client-test PRIVATE sign-recognition GTest::gtest_main)
 target_compile_options(bytetrack-client-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME bytetrack-client COMMAND bytetrack-client-test)
+add_executable(tracking-soak-test
+    modules/sign-recognition/tests/TrackingSoakTest.cpp)
+target_link_libraries(tracking-soak-test PRIVATE sign-recognition GTest::gtest_main)
+target_compile_options(tracking-soak-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME tracking-soak COMMAND tracking-soak-test)
+add_executable(session-soak-test tests/integration/SessionSoakTest.cpp)
+target_link_libraries(session-soak-test PRIVATE recognition-session GTest::gtest_main)
+target_compile_options(session-soak-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME session-soak COMMAND session-soak-test)
 
 add_executable(road-sign-server app/Main.cpp)
 target_include_directories(road-sign-server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
