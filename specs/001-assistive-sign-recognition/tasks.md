@@ -160,7 +160,7 @@ fixed observations independently from detector quality.
 
 ### Tests for User Story 2
 
-- [ ] T045 [P] [US2] Write tracker/consensus tests in `backend/modules/sign-recognition/tests/TrackingTest.cpp` for per-class overlaps, variable source-time intervals, 2-second loss/reacquisition, separate same-text signs, frame-history versus OCR-history retention, track bounds and removed-history cleanup.
+- [X] T045 [P] [US2] Write tracker/consensus tests in `backend/modules/sign-recognition/tests/TrackingTest.cpp` for per-class overlaps, variable source-time intervals, 2-second loss/reacquisition, separate same-text signs, frame-history versus OCR-history retention, track bounds and removed-history cleanup.
 - [X] T046 [P] [US2] Write priority/duplicate/cancellation tests in `backend/modules/announcements/tests/AnnouncementPolicyTest.cpp` for pending/synthesizing/offered/started signatures, changed text, whitespace-only changes, queue overflow, five-second expiry and cancellation-ack timeout before reuse.
 - [ ] T047 [P] [US2] Write video/upload/seek contract tests in `backend/tests/integration/VideoRecognitionContractTest.cpp` for codecs/limits, EOF review, source-time pacing, admission rejection, epoch reset during inference/TTS and no old-epoch playback.
 
