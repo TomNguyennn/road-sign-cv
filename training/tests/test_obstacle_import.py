@@ -16,19 +16,21 @@ def make_review(tmp_path: Path) -> Path:
     (source / "label.txt").write_text("6 0.5 0.5 0.2 0.2\n2 0.2 0.2 0.1 0.1\n")
     review = {
         "datasetRevision": "a" * 40,
-        "images": [{
-            "imagePath": "image.jpg",
-            "imageSha256": hashlib.sha256((source / "image.jpg").read_bytes()).hexdigest(),
-            "labelPath": "label.txt",
-            "labelSha256": hashlib.sha256((source / "label.txt").read_bytes()).hexdigest(),
-            "sourceId": "reviewed-source",
-            "locationGroup": "same-place",
-            "split": "train",
-            "permission": "fixture owner approved training",
-            "licence": "fixture only",
-            "approved": True,
-            "reviewedCompleteAnnotations": True,
-        }],
+        "images": [
+            {
+                "imagePath": "image.jpg",
+                "imageSha256": hashlib.sha256((source / "image.jpg").read_bytes()).hexdigest(),
+                "labelPath": "label.txt",
+                "labelSha256": hashlib.sha256((source / "label.txt").read_bytes()).hexdigest(),
+                "sourceId": "reviewed-source",
+                "locationGroup": "same-place",
+                "split": "train",
+                "permission": "fixture owner approved training",
+                "licence": "fixture only",
+                "approved": True,
+                "reviewedCompleteAnnotations": True,
+            }
+        ],
     }
     path = tmp_path / "review.json"
     path.write_text(json.dumps(review))
@@ -39,7 +41,10 @@ def test_import_preserves_provenance_and_flags_dropped_labels(tmp_path: Path) ->
     review_path = make_review(tmp_path)
     before = (tmp_path / "source" / "image.jpg").read_bytes()
     result = import_obstacles(tmp_path / "source", review_path, tmp_path / "output")
-    scene = result["scenes"][0]
+    scenes = result["scenes"]
+    assert isinstance(scenes, list)
+    scene = scenes[0]
+    assert isinstance(scene, dict)
     assert scene["sourceId"] == "reviewed-source"
     assert scene["obstacleBoxesYolo"] == [[6.0, 0.5, 0.5, 0.2, 0.2]]
     assert scene["ignoredBoxesYolo"] == [[2.0, 0.2, 0.2, 0.1, 0.1]]
@@ -49,12 +54,15 @@ def test_import_preserves_provenance_and_flags_dropped_labels(tmp_path: Path) ->
     assert json.loads((tmp_path / "output" / "subset.json").read_text()) == result
 
 
-@pytest.mark.parametrize("change", [
-    lambda value: value.update(datasetRevision="latest"),
-    lambda value: value["images"][0].update(approved=False),
-    lambda value: value["images"][0].update(imageSha256="0" * 64),
-    lambda value: value["images"][0].update(imagePath="../other.jpg"),
-])
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda value: value.update(datasetRevision="latest"),
+        lambda value: value["images"][0].update(approved=False),
+        lambda value: value["images"][0].update(imageSha256="0" * 64),
+        lambda value: value["images"][0].update(imagePath="../other.jpg"),
+    ],
+)
 def test_rejects_unreviewed_or_unpinned_inputs(
     tmp_path: Path, change: Callable[[dict[str, Any]], None]
 ) -> None:

@@ -3,6 +3,7 @@ import json
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -66,7 +67,7 @@ def make_manifest(tmp_path: Path) -> Path:
     return path
 
 
-def rewrite_manifest(path: Path, edit: Callable[[dict[str, object]], None]) -> None:
+def rewrite_manifest(path: Path, edit: Callable[[dict[str, Any]], None]) -> None:
     manifest = json.loads(path.read_text(encoding="utf-8"))
     edit(manifest)
     path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -100,7 +101,9 @@ def test_rejects_transcript_for_non_text_classes(tmp_path: Path, class_id: int) 
     "class_id, old_category",
     [(5, "pedestrian-direction"), (7, "temporary-pedestrian-notice")],
 )
-def test_rejects_previous_catalogue_mapping(tmp_path: Path, class_id: int, old_category: str) -> None:
+def test_rejects_previous_catalogue_mapping(
+    tmp_path: Path, class_id: int, old_category: str
+) -> None:
     path = make_manifest(tmp_path)
     rewrite_manifest(
         path,
@@ -153,7 +156,7 @@ def test_rare_category_is_stratified_across_splits() -> None:
     ],
 )
 def test_rejects_invalid_or_leaking_manifest(
-    tmp_path: Path, change: Callable[[dict[str, object]], None]
+    tmp_path: Path, change: Callable[[dict[str, Any]], None]
 ) -> None:
     path = make_manifest(tmp_path)
     rewrite_manifest(path, change)

@@ -78,9 +78,19 @@ def import_obstacles(source_root: Path, review_path: Path, output_dir: Path) -> 
     for index, raw_image in enumerate(images):
         image = require_object(
             raw_image,
-            {"imagePath", "imageSha256", "labelPath", "labelSha256", "sourceId",
-             "locationGroup", "split", "permission", "licence", "approved",
-             "reviewedCompleteAnnotations"},
+            {
+                "imagePath",
+                "imageSha256",
+                "labelPath",
+                "labelSha256",
+                "sourceId",
+                "locationGroup",
+                "split",
+                "permission",
+                "licence",
+                "approved",
+                "reviewedCompleteAnnotations",
+            },
             "image",
         )
         if image["approved"] is not True or image["reviewedCompleteAnnotations"] is not True:
@@ -103,19 +113,21 @@ def import_obstacles(source_root: Path, review_path: Path, output_dir: Path) -> 
             raise ValueError("image: no approved obstacle annotation")
         target_name = f"{index:06d}{media.suffix.lower()}"
         copies.append((media, target_name))
-        scenes.append({
-            "image": target_name,
-            "imageSha256": image["imageSha256"],
-            "labelSha256": image["labelSha256"],
-            "sourceId": source_id,
-            "locationGroup": location,
-            "split": split,
-            "permission": permission,
-            "licence": licence,
-            "obstacleBoxesYolo": boxes,
-            "ignoredBoxesYolo": ignored_boxes,
-            "requiresReview": bool(ignored_boxes),
-        })
+        scenes.append(
+            {
+                "image": target_name,
+                "imageSha256": image["imageSha256"],
+                "labelSha256": image["labelSha256"],
+                "sourceId": source_id,
+                "locationGroup": location,
+                "split": split,
+                "permission": permission,
+                "licence": licence,
+                "obstacleBoxesYolo": boxes,
+                "ignoredBoxesYolo": ignored_boxes,
+                "requiresReview": bool(ignored_boxes),
+            }
+        )
 
     result: dict[str, object] = {"datasetRevision": revision, "scenes": scenes}
     output_dir.parent.mkdir(parents=True, exist_ok=True)
