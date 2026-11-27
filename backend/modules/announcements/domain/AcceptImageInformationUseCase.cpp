@@ -8,7 +8,12 @@ std::optional<StillImageDescription> AcceptImageInformationUseCase::describeObst
     if (observation.categoryId != obstacleCategory || observation.confidence < stillScore ||
         !observation.isValid(0, 0, imageSize)) return std::nullopt;
 
-    const auto visibleBox = observation.box.clipped(imageSize);
+    return describePosition(observation.box, imageSize);
+}
+
+std::optional<StillImageDescription> AcceptImageInformationUseCase::describePosition(
+    Box box, ImageSize imageSize) {
+    const auto visibleBox = box.clipped(imageSize);
     if (!visibleBox) return std::nullopt;
     const double centre = (visibleBox->x + visibleBox->width / 2) / imageSize.width;
     if (centre < 1.0 / 3.0)

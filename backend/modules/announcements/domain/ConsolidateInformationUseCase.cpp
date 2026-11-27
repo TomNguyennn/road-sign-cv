@@ -16,6 +16,7 @@ constexpr std::size_t DETECTION_HISTORY_LIMIT = 5;
 constexpr std::size_t OCR_HISTORY_LIMIT = 3;
 constexpr std::uint32_t STREET_NAME_CATEGORY_ID = 4;
 constexpr std::uint32_t BUS_STOP_CATEGORY_ID = 6;
+constexpr std::uint32_t OBSTACLE_CATEGORY_ID = 7;
 
 bool hasCategoryConsensus(const SignRecognition::TrackEvidenceDto& evidence) {
     std::size_t count = 0;
@@ -59,23 +60,38 @@ std::optional<SignRecognition::TextReadingDto> acceptedReading(
 } // namespace
 
 ConsolidationDecisionDto ConsolidateInformationUseCase::evaluate(
-    const SignRecognition::TrackEvidenceDto& evidence) {
+    const SignRecognition::TrackEvidenceDto& evidence, ImageSize frameSize) {
     ConsolidationDecisionDto decision{};
     if (!evidence.isActive || evidence.trackId.empty() || evidence.detections.empty() ||
         evidence.categoryId >= 8 || !std::isfinite(evidence.lastSourceTimeMs) ||
         evidence.lastSourceTimeMs < 0.0) return decision;
     const auto frameId = evidence.detections.back().frameId;
     if (currentFrameId_ && frameId < *currentFrameId_) return decision;
-    decision.shouldConfirm = !evidence.isConfirmed && hasCategoryConsensus(evidence);
-    if (!evidence.isConfirmed && !decision.shouldConfirm) return decision;
-    const bool isTextCategory = evidence.categoryId == STREET_NAME_CATEGORY_ID ||
-                                evidence.categoryId == BUS_STOP_CATEGORY_ID;
-    if (!isTextCategory) return decision;
-    decision.acceptedText = acceptedReading(evidence);
     if (!currentFrameId_ || *currentFrameId_ != frameId) {
         currentFrameId_ = frameId;
         cropsThisFrame_ = 0;
     }
+    decision.shouldConfirm = !evidence.isConfirmed && hasCategoryConsensus(evidence);
+    if (!evidence.isConfirmed && !decision.shouldConfirm) return decision;
+    if (evidence.categoryId == OBSTACLE_CATEGORY_ID) {
+        for (auto it = obstacleLastSeenByTrack_.begin();
+             it != obstacleLastSeenByTrack_.end();)
+            if (evidence.lastSourceTimeMs - it->second > CONSENSUS_WINDOW_MS)
+                it = obstacleLastSeenByTrack_.erase(it);
+            else
+                ++it;
+        auto [stored, isNew] = obstacleLastSeenByTrack_.try_emplace(
+            evidence.trackId, evidence.lastSourceTimeMs);
+        if (isNew) decision.acceptedObstacle = AcceptImageInformationUseCase::describePosition(
+            evidence.detections.back().box, frameSize);
+        if (!decision.acceptedObstacle && isNew) obstacleLastSeenByTrack_.erase(stored);
+        else stored->second = evidence.lastSourceTimeMs;
+        return decision;
+    }
+    const bool isTextCategory = evidence.categoryId == STREET_NAME_CATEGORY_ID ||
+                                evidence.categoryId == BUS_STOP_CATEGORY_ID;
+    if (!isTextCategory) return decision;
+    decision.acceptedText = acceptedReading(evidence);
     for (auto it = lastOcrTimeByTrack_.begin(); it != lastOcrTimeByTrack_.end();)
         if (evidence.lastSourceTimeMs - it->second > CONSENSUS_WINDOW_MS)
             it = lastOcrTimeByTrack_.erase(it);
@@ -93,11 +109,13 @@ ConsolidationDecisionDto ConsolidateInformationUseCase::evaluate(
 
 void ConsolidateInformationUseCase::forget(std::string_view trackId) {
     lastOcrTimeByTrack_.erase(std::string(trackId));
+    obstacleLastSeenByTrack_.erase(std::string(trackId));
 }
 
 void ConsolidateInformationUseCase::reset() noexcept {
     currentFrameId_.reset();
     cropsThisFrame_ = 0;
     lastOcrTimeByTrack_.clear();
+    obstacleLastSeenByTrack_.clear();
 }
 } // namespace RoadSign::Announcements

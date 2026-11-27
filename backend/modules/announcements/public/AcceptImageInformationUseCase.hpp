@@ -17,5 +17,7 @@ class AcceptImageInformationUseCase {
 public:
     [[nodiscard]] static std::optional<StillImageDescription> describeObstacle(
         const SignRecognition::SignObservation& observation, ImageSize imageSize);
+    [[nodiscard]] static std::optional<StillImageDescription> describePosition(
+        Box box, ImageSize imageSize);
 };
 } // namespace RoadSign::Announcements
