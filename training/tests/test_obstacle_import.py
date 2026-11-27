@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from road_sign_training.import_obstacles import import_obstacles
+from road_sign_training.import_obstacles import OBSTACLE_CLASS_IDS, import_obstacles, parse_labels
 
 
 def make_review(tmp_path: Path) -> Path:
@@ -53,6 +53,16 @@ def test_import_preserves_provenance_and_flags_dropped_labels(tmp_path: Path) ->
     assert (tmp_path / "output" / "000000.jpg").read_bytes() == before
     assert (tmp_path / "source" / "image.jpg").read_bytes() == before
     assert json.loads((tmp_path / "output" / "subset.json").read_text()) == result
+
+
+@pytest.mark.parametrize("source_class_id", sorted(OBSTACLE_CLASS_IDS))
+def test_maps_each_approved_rod_class_to_obstacle(tmp_path: Path, source_class_id: int) -> None:
+    label = tmp_path / "label.txt"
+    label.write_text(f"{source_class_id} 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+    boxes, original_ids, ignored = parse_labels(label)
+    assert boxes == [[7.0, 0.5, 0.5, 0.2, 0.2]]
+    assert original_ids == [source_class_id]
+    assert ignored == []
 
 
 @pytest.mark.parametrize(
