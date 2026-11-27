@@ -16,15 +16,21 @@ SignRecognition::SignObservation obstacle(Box box, double confidence = 0.75) {
 TEST(ObstacleAnnouncementTest, DescribesClippedBoxCentreAtExactThirdBoundaries) {
     constexpr ImageSize size{300, 100};
     const auto left = AcceptImageInformationUseCase::describeObstacle(obstacle({-20, 0, 40, 20}), size);
+    const auto beforeCentre = AcceptImageInformationUseCase::describeObstacle(obstacle({89.999, 0, 20, 20}), size);
     const auto centre = AcceptImageInformationUseCase::describeObstacle(obstacle({90, 0, 20, 20}), size);
+    const auto beforeRight = AcceptImageInformationUseCase::describeObstacle(obstacle({189.999, 0, 20, 20}), size);
     const auto right = AcceptImageInformationUseCase::describeObstacle(obstacle({190, 0, 20, 20}), size);
     const auto farRight = AcceptImageInformationUseCase::describeObstacle(obstacle({290, 0, 30, 20}), size);
     ASSERT_TRUE(left);
+    ASSERT_TRUE(beforeCentre);
     ASSERT_TRUE(centre);
+    ASSERT_TRUE(beforeRight);
     ASSERT_TRUE(right);
     ASSERT_TRUE(farRight);
     EXPECT_EQ(left->text, "Possible obstacle on the left of the camera view");
+    EXPECT_EQ(beforeCentre->text, left->text);
     EXPECT_EQ(centre->text, "Possible obstacle in the centre of the camera view");
+    EXPECT_EQ(beforeRight->text, centre->text);
     EXPECT_EQ(right->text, "Possible obstacle on the right of the camera view");
     EXPECT_EQ(farRight->text, right->text);
     EXPECT_EQ(left->priority, 0);
