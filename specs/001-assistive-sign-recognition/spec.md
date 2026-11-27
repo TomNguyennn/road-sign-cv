@@ -38,6 +38,9 @@ camera session, then compare the spoken information with the reference meaning a
    an accessible no-result status.
 5. **Given** two supported sign categories in one scene, **When** recognition results are accepted,
    **Then** their meanings and text remain associated with the correct signs.
+6. **Given** a supported fixed obstacle is accepted in an image, **When** its description is spoken,
+   **Then** it says a possible obstacle is on the left, centre or right of the camera view without
+   asserting distance, a clear path or a safe direction.
 
 ---
 
@@ -69,6 +72,8 @@ expected sequence. Test announcement policy separately with fixed recognition ob
    precede general information; equal-priority items follow acceptance order.
 6. **Given** a queued result becomes obsolete or its source is replaced, **When** playback advances,
    **Then** it does not speak the obsolete result. Separate announcements never overlap.
+7. **Given** an obstacle has been announced and retains its track identity, **When** its camera-view
+   position changes, **Then** the position change alone does not trigger another automatic announcement.
 
 ---
 
@@ -215,7 +220,8 @@ an evaluation report from a fixed labelled evaluation set and recorded test cond
 - **FR-016**: Evaluation MUST measure all outcomes below using documented ground truth, metric
   definitions, configuration, and test conditions. Separate evaluation media MUST be authorised
   for that purpose; ephemeral user sessions MUST NOT be silently retained as evaluation data.
-- **FR-017**: Descriptions MUST concern observed signs and text. The prototype MUST NOT issue
+- **FR-017**: Descriptions MUST concern observed signs, text or accepted fixed obstacles; obstacle
+  position MUST be described relative to the camera view. The prototype MUST NOT issue
   route guidance, obstacle-avoidance instructions, or decisions that a road is safe to cross.
 
 ### Key Entities *(include if feature involves data)*

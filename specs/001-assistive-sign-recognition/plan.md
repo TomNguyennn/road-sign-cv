@@ -8,6 +8,11 @@ Review selected ROD dataset poles, bins, benches, cones, barriers and similar fi
 
 For accepted obstacles, announce a possible obstacle on the left, centre or right of the camera view. Derive position from the clipped box centre in equal-width image thirds. Apply existing tracking, confidence and duplicate suppression; priority is 0. Do not infer distance, collision, a clear path or a safe direction. Test position boundaries, uncertainty, camera movement and repeated alerts; evaluate on held-out UK scenes.
 
+For normalized horizontal centre `x`, left is `0 <= x < 1/3`, centre is `1/3 <= x < 2/3`, and
+right is `2/3 <= x <= 1`. Position describes the frame used for the accepted observation. A
+position-only change on the same tracked obstacle does not advance its accepted revision or trigger
+another automatic announcement; a new track follows the existing announcement policy.
+
 **Branch**: `001-assistive-sign-recognition` | **Date**: 2026-11-23 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/001-assistive-sign-recognition/spec.md`
