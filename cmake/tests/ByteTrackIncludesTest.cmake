@@ -3,6 +3,8 @@ file(MAKE_DIRECTORY "${FIXTURE_DIR}")
 foreach(SOURCE_NAME IN ITEMS BYTETracker.cpp utils.cpp)
     file(WRITE "${FIXTURE_DIR}/${SOURCE_NAME}" "// original source body\n")
 endforeach()
+file(APPEND "${FIXTURE_DIR}/BYTETracker.cpp"
+    "detections_low.push_back(strack);\nremove_duplicate_stracks(resa, resb, this->tracked_stracks, this->lost_stracks);\n")
 execute_process(COMMAND "${CMAKE_COMMAND}" -DBYTETRACK_SOURCE_DIR=${TEST_BINARY_DIR}
     -P "${CMAKE_CURRENT_LIST_DIR}/../ByteTrackIncludes.cmake"
     COMMAND_ERROR_IS_FATAL ANY)
@@ -23,4 +25,8 @@ foreach(CONTENT IN ITEMS "${TRACKER_SECOND}" "${UTILS_SECOND}")
 endforeach()
 if(NOT UTILS_SECOND MATCHES "#include <map>")
     message(FATAL_ERROR "Tracker utilities require map")
+endif()
+if(NOT TRACKER_SECOND MATCHES "score >= 0.10f" OR
+   NOT TRACKER_SECOND MATCHES "removed_stracks.size\\(\\) > 100")
+    message(FATAL_ERROR "Tracker patch must filter low scores and bound removed history")
 endif()
