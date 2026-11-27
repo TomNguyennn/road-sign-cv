@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../public/SignObservation.hpp"
+#include "../public/TrackEvidenceDto.hpp"
 
 #include <cstdint>
 #include <deque>
@@ -31,6 +32,7 @@ public:
     void markLost(double sourceTimeMs) noexcept;
     [[nodiscard]] bool recordOcr(OcrSample sample);
     [[nodiscard]] bool acceptText(std::string displayText, std::string normalizedText);
+    [[nodiscard]] TrackEvidenceDto evidence() const;
 
     [[nodiscard]] const std::string& trackId() const noexcept { return trackId_; }
     [[nodiscard]] State state() const noexcept { return state_; }

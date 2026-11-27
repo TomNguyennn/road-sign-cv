@@ -144,4 +144,15 @@ bool TrackedSign::acceptText(std::string displayText, std::string normalizedText
     ++revision_;
     return true;
 }
+
+TrackEvidenceDto TrackedSign::evidence() const {
+    TrackEvidenceDto result{trackId_, categoryId_, revision_,
+                            state_ == State::tentative || state_ == State::confirmed,
+                            state_ == State::confirmed, lastSourceTimeMs_, {}, {}};
+    result.detections.assign(detections_.begin(), detections_.end());
+    for (const auto& sample : ocrSamples_)
+        result.ocrSamples.push_back({sample.displayText, sample.normalizedText,
+                                     sample.confidence, sample.sourceTimeMs});
+    return result;
+}
 } // namespace RoadSign::SignRecognition

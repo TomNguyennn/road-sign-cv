@@ -109,6 +109,20 @@ TEST(TrackingTest, NewDetectionsExpireOldOcrWithoutChangingDetectionHistory) {
     EXPECT_EQ(track->detections().size(), std::size_t{3});
 }
 
+TEST(TrackingTest, EvidenceCopiesBoundedHistoriesAcrossModuleBoundary) {
+    auto track = TrackedSign::start("session", 1, 1, observation(1, 4, 0, 0), FRAME_SIZE);
+    ASSERT_TRUE(track);
+    ASSERT_TRUE(track->observe(observation(2, 4, 100, 1), 1, FRAME_SIZE));
+    ASSERT_TRUE(track->recordOcr({"High Street", "high street", 0.9, 100}));
+    auto evidence = track->evidence();
+    ASSERT_EQ(evidence.detections.size(), std::size_t{2});
+    ASSERT_EQ(evidence.ocrSamples.size(), std::size_t{1});
+    evidence.detections.clear();
+    evidence.ocrSamples.front().displayText = "Changed";
+    EXPECT_EQ(track->detections().size(), std::size_t{2});
+    EXPECT_EQ(track->ocrSamples().front().displayText, "High Street");
+}
+
 TEST(TrackingTest, RejectsInvalidTrackCreationAndLateOcr) {
     EXPECT_FALSE(TrackedSign::start("", 1, 1, observation(1, 4, 0, 0), FRAME_SIZE));
     EXPECT_FALSE(TrackedSign::start("session", 0, 1, observation(1, 4, 0, 0), FRAME_SIZE));
