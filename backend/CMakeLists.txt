@@ -82,6 +82,16 @@ target_link_libraries(native-recognition-test PRIVATE media-processing GTest::gt
 target_compile_options(native-recognition-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME native-recognition COMMAND native-recognition-test)
 
+add_library(announcements STATIC
+    modules/announcements/domain/AcceptImageInformationUseCase.cpp)
+target_include_directories(announcements PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_options(announcements PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_executable(obstacle-announcement-test
+    modules/announcements/tests/ObstacleAnnouncementTest.cpp)
+target_link_libraries(obstacle-announcement-test PRIVATE announcements GTest::gtest_main)
+target_compile_options(obstacle-announcement-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME obstacle-announcement COMMAND obstacle-announcement-test)
+
 add_executable(road-sign-server app/Main.cpp)
 target_include_directories(road-sign-server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(road-sign-server PRIVATE recognition-session road-sign-runtime-config Drogon::Drogon)
