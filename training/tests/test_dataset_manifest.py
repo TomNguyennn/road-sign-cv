@@ -8,6 +8,9 @@ import pytest
 
 from road_sign_training.dataset_manifest import assign_grouped_splits, load_manifest
 
+CATALOGUE_PATH = Path(__file__).resolve().parents[2] / "resources" / "catalogue.json"
+CATALOGUE = json.loads(CATALOGUE_PATH.read_text(encoding="utf-8"))
+
 
 def make_manifest(tmp_path: Path) -> Path:
     sources = []
@@ -24,8 +27,9 @@ def make_manifest(tmp_path: Path) -> Path:
             annotations = [
                 {
                     "classId": class_id,
+                    "category": CATALOGUE["entries"][class_id]["category"],
                     "box": [class_id * 10, 0, 8, 8],
-                    "transcript": "Main Street" if class_id >= 4 else None,
+                    "transcript": "Main Street" if class_id in (4, 6) else None,
                     "trackId": None,
                 }
                 for class_id in range(8)
@@ -52,6 +56,7 @@ def make_manifest(tmp_path: Path) -> Path:
     manifest = {
         "datasetId": "fixture",
         "version": "1",
+        "catalogueSha256": hashlib.sha256(CATALOGUE_PATH.read_bytes()).hexdigest(),
         "seed": 42,
         "sources": sources,
         "scenes": scenes,
@@ -78,6 +83,38 @@ def test_valid_grouped_manifest_with_negative(tmp_path: Path) -> None:
         "test": 3,
     }
     assert load_manifest(path).scenes == manifest.scenes
+
+
+@pytest.mark.parametrize("class_id", [5, 7])
+def test_rejects_transcript_for_non_text_classes(tmp_path: Path, class_id: int) -> None:
+    path = make_manifest(tmp_path)
+    rewrite_manifest(
+        path,
+        lambda value: value["scenes"][0]["annotations"][class_id].update(transcript="Old text"),
+    )
+    with pytest.raises(ValueError, match="non-text"):
+        load_manifest(path)
+
+
+@pytest.mark.parametrize(
+    "class_id, old_category",
+    [(5, "pedestrian-direction"), (7, "temporary-pedestrian-notice")],
+)
+def test_rejects_previous_catalogue_mapping(tmp_path: Path, class_id: int, old_category: str) -> None:
+    path = make_manifest(tmp_path)
+    rewrite_manifest(
+        path,
+        lambda value: value["scenes"][0]["annotations"][class_id].update(category=old_category),
+    )
+    with pytest.raises(ValueError, match="category"):
+        load_manifest(path)
+
+
+def test_rejects_previous_catalogue_checksum(tmp_path: Path) -> None:
+    path = make_manifest(tmp_path)
+    rewrite_manifest(path, lambda value: value.update(catalogueSha256="0" * 64))
+    with pytest.raises(ValueError, match="catalogueSha256"):
+        load_manifest(path)
 
 
 def test_shared_source_and_location_stay_in_one_split() -> None:

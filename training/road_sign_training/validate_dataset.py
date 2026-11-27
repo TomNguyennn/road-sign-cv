@@ -12,7 +12,8 @@ def main() -> None:
     args = parser.parse_args()
     manifest = load_manifest(args.manifest)
     print(
-        f"Validated {manifest.dataset_id} version {manifest.version}: {len(manifest.scenes)} scenes"
+        f"Validated {manifest.dataset_id} version {manifest.version}: "
+        f"{len(manifest.scenes)} scenes, catalogue {manifest.catalogue_sha256}"
     )
 
 

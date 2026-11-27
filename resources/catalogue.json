@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "catalogueVersion": 2,
   "entries": [
     {
       "classId": 0,
@@ -48,12 +49,12 @@
     },
     {
       "classId": 5,
-      "category": "pedestrian-direction",
-      "spokenName": "Pedestrian direction sign",
-      "isTextRelevant": true,
+      "category": "shared-path-with-cyclist",
+      "spokenName": "Shared path with cyclists",
+      "isTextRelevant": false,
       "priority": 1,
-      "includedVariants": ["Fixed pedestrian wayfinding signs with destination text and an explicit direction marker"],
-      "excludedVariants": ["Vehicle-only direction signs", "Destination text without a direction marker", "Temporary pedestrian diversion or closure notices"]
+      "includedVariants": ["UK shared pedestrian and cycle path signs showing both pedestrian and cycle symbols"],
+      "excludedVariants": ["Cycle-only path signs", "Pedestrian-only path signs", "Text-only cycle notices", "Cyclists without a sign"]
     },
     {
       "classId": 6,
@@ -66,12 +67,12 @@
     },
     {
       "classId": 7,
-      "category": "temporary-pedestrian-notice",
-      "spokenName": "Temporary pedestrian notice",
-      "isTextRelevant": true,
+      "category": "obstacles",
+      "spokenName": "Possible obstacle",
+      "isTextRelevant": false,
       "priority": 0,
-      "includedVariants": ["Temporary posted pedestrian closure, diversion or access notices with explicit readable pedestrian wording"],
-      "excludedVariants": ["Fixed pedestrian direction signs", "Generic temporary advertising", "Unreadable or unidentifiable temporary boards"]
+      "includedVariants": ["Fixed street furniture such as poles, bins, benches, bollards and fixed barriers", "Stationary traffic cones or temporary barriers whose position is visible in the scene"],
+      "excludedVariants": ["People, animals and moving vehicles", "Unidentifiable clutter", "Objects whose visible bounds cannot be annotated reliably"]
     }
   ]
 }

@@ -12,7 +12,8 @@ SPLITS = ("train", "validation", "test")
 SPLIT_FRACTIONS = {"train": 0.70, "validation": 0.15, "test": 0.15}
 SPLIT_SEED = 42
 CLASS_COUNT = 8
-TEXT_CLASS_START = 4
+TEXT_CLASS_IDS = frozenset({4, 6})
+CATALOGUE_PATH = Path(__file__).resolve().parents[2] / "resources" / "catalogue.json"
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class Scene:
 class DatasetManifest:
     dataset_id: str
     version: str
+    catalogue_sha256: str
     scenes: tuple[Scene, ...]
 
 
@@ -131,8 +133,10 @@ def assign_grouped_splits(scenes: Sequence[Mapping[str, object]]) -> dict[str, s
     return assigned
 
 
-def parse_annotation(value: object, width: int, height: int, media_kind: str) -> Annotation:
-    item = require_object(value, {"classId", "box", "transcript", "trackId"}, "annotation")
+def parse_annotation(
+    value: object, width: int, height: int, media_kind: str, categories: tuple[str, ...]
+) -> Annotation:
+    item = require_object(value, {"classId", "category", "box", "transcript", "trackId"}, "annotation")
     class_id = item["classId"]
     if (
         isinstance(class_id, bool)
@@ -140,6 +144,8 @@ def parse_annotation(value: object, width: int, height: int, media_kind: str) ->
         or not 0 <= class_id < CLASS_COUNT
     ):
         raise ValueError("annotation: invalid classId")
+    if item["category"] != categories[class_id]:
+        raise ValueError("annotation: category does not match catalogue classId")
     raw_box = item["box"]
     if not isinstance(raw_box, list) or len(raw_box) != 4:
         raise ValueError("annotation: box must be xywh")
@@ -160,8 +166,8 @@ def parse_annotation(value: object, width: int, height: int, media_kind: str) ->
     transcript = item["transcript"]
     if transcript is not None:
         transcript = require_text(transcript, "transcript")
-    if class_id < TEXT_CLASS_START and transcript is not None:
-        raise ValueError("annotation: symbol class cannot carry transcript")
+    if class_id not in TEXT_CLASS_IDS and transcript is not None:
+        raise ValueError("annotation: non-text class cannot carry transcript")
     track_id = item["trackId"]
     if track_id is not None:
         track_id = require_text(track_id, "trackId")
@@ -191,7 +197,7 @@ def validate_media(path: Path, raw_path: object, checksum: object) -> Path:
     return media
 
 
-def parse_scene(value: object, path: Path) -> Scene:
+def parse_scene(value: object, path: Path, categories: tuple[str, ...]) -> Scene:
     item = require_object(
         value,
         {
@@ -213,10 +219,10 @@ def parse_scene(value: object, path: Path) -> Scene:
     source_id = require_text(item["sourceId"], "sourceId")
     location_group = require_text(item["locationGroup"], "locationGroup")
     split = item["split"]
-    if split not in SPLITS:
+    if not isinstance(split, str) or split not in SPLITS:
         raise ValueError("scene: invalid split")
     media_kind = item["mediaKind"]
-    if media_kind not in ("image", "video-frame"):
+    if not isinstance(media_kind, str) or media_kind not in ("image", "video-frame"):
         raise ValueError("scene: invalid mediaKind")
     width = require_positive_int(item["width"], "width")
     height = require_positive_int(item["height"], "height")
@@ -238,7 +244,7 @@ def parse_scene(value: object, path: Path) -> Scene:
             raise ValueError("augmentation: expected text names")
     media = validate_media(path, item["mediaPath"], item["sha256"])
     annotations = tuple(
-        parse_annotation(value, width, height, media_kind) for value in raw_annotations
+        parse_annotation(value, width, height, media_kind, categories) for value in raw_annotations
     )
     return Scene(
         scene_id,
@@ -257,9 +263,17 @@ def parse_scene(value: object, path: Path) -> Scene:
 def load_manifest(path: Path) -> DatasetManifest:
     raw = require_object(
         json.loads(path.read_text(encoding="utf-8")),
-        {"datasetId", "version", "seed", "sources", "scenes"},
+        {"datasetId", "version", "catalogueSha256", "seed", "sources", "scenes"},
         "manifest",
     )
+    catalogue_bytes = CATALOGUE_PATH.read_bytes()
+    catalogue_sha256 = hashlib.sha256(catalogue_bytes).hexdigest()
+    if raw["catalogueSha256"] != catalogue_sha256:
+        raise ValueError("catalogueSha256: catalogue checksum mismatch")
+    catalogue = json.loads(catalogue_bytes)
+    categories = tuple(entry["category"] for entry in catalogue["entries"])
+    if len(categories) != CLASS_COUNT:
+        raise ValueError("catalogue: invalid class count")
     if raw["seed"] != SPLIT_SEED or isinstance(raw["seed"], bool):
         raise ValueError("seed: expected 42")
     sources = raw["sources"]
@@ -275,7 +289,7 @@ def load_manifest(path: Path) -> DatasetManifest:
         if source_id in source_ids:
             raise ValueError("sourceId: duplicate")
         source_ids.add(source_id)
-    scenes = tuple(parse_scene(value, path) for value in raw_scenes)
+    scenes = tuple(parse_scene(value, path, categories) for value in raw_scenes)
     if len({scene.scene_id for scene in scenes}) != len(scenes):
         raise ValueError("sceneId: duplicate")
     if any(scene.source_id not in source_ids for scene in scenes):
@@ -295,5 +309,8 @@ def load_manifest(path: Path) -> DatasetManifest:
     if not any(not scene.annotations for scene in scenes):
         raise ValueError("scenes: at least one negative is required")
     return DatasetManifest(
-        require_text(raw["datasetId"], "datasetId"), require_text(raw["version"], "version"), scenes
+        require_text(raw["datasetId"], "datasetId"),
+        require_text(raw["version"], "version"),
+        catalogue_sha256,
+        scenes,
     )

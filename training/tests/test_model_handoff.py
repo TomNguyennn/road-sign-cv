@@ -3,7 +3,10 @@
 import json
 from pathlib import Path
 
+from road_sign_training.dataset_manifest import CLASS_COUNT, TEXT_CLASS_IDS
+
 CATALOGUE_PATH = Path(__file__).resolve().parents[2] / "resources" / "catalogue.json"
+POLICY_PATH = Path(__file__).resolve().parents[2] / "config" / "policy.json"
 
 
 def test_catalogue_matches_model_class_order() -> None:
@@ -15,12 +18,15 @@ def test_catalogue_matches_model_class_order() -> None:
         ("roadworks-warning", "Roadworks warning", False, 0),
         ("no-pedestrians", "No pedestrians", False, 0),
         ("street-name", "Street name", True, 2),
-        ("pedestrian-direction", "Pedestrian direction sign", True, 1),
+        ("shared-path-with-cyclist", "Shared path with cyclists", False, 1),
         ("bus-stop", "Bus stop", True, 2),
-        ("temporary-pedestrian-notice", "Temporary pedestrian notice", True, 0),
+        ("obstacles", "Possible obstacle", False, 0),
     ]
 
     assert catalogue["schemaVersion"] == 1
+    assert catalogue["catalogueVersion"] == 2
+    assert len(entries) == CLASS_COUNT
+    assert {entry["classId"] for entry in entries if entry["isTextRelevant"]} == TEXT_CLASS_IDS
     assert len(entries) == len(expected)
     for class_id, (category, spoken_name, is_text_relevant, priority) in enumerate(expected):
         entry = entries[class_id]
@@ -31,3 +37,6 @@ def test_catalogue_matches_model_class_order() -> None:
         assert entry["priority"] == priority
         assert entry["includedVariants"]
         assert entry["excludedVariants"]
+
+    policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+    assert policy["speech"]["categoryPriority"] == [entry["priority"] for entry in entries]
