@@ -46,7 +46,8 @@ def test_import_preserves_provenance_and_flags_dropped_labels(tmp_path: Path) ->
     scene = scenes[0]
     assert isinstance(scene, dict)
     assert scene["sourceId"] == "reviewed-source"
-    assert scene["obstacleBoxesYolo"] == [[6.0, 0.5, 0.5, 0.2, 0.2]]
+    assert scene["obstacleBoxesYolo"] == [[7.0, 0.5, 0.5, 0.2, 0.2]]
+    assert scene["sourceObstacleClassIds"] == [6]
     assert scene["ignoredBoxesYolo"] == [[2.0, 0.2, 0.2, 0.1, 0.1]]
     assert scene["requiresReview"] is True
     assert (tmp_path / "output" / "000000.jpg").read_bytes() == before

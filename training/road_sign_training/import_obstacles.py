@@ -30,8 +30,9 @@ def source_file(root: Path, raw_path: object, checksum: object) -> Path:
     return path
 
 
-def parse_labels(path: Path) -> tuple[list[list[float]], list[list[float]]]:
+def parse_labels(path: Path) -> tuple[list[list[float]], list[int], list[list[float]]]:
     obstacle_boxes: list[list[float]] = []
+    source_class_ids: list[int] = []
     ignored_boxes: list[list[float]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         fields = line.split()
@@ -50,12 +51,12 @@ def parse_labels(path: Path) -> tuple[list[list[float]], list[list[float]]]:
             raise ValueError("label: box outside image")
         if y - height / 2 < 0 or y + height / 2 > 1:
             raise ValueError("label: box outside image")
-        box = [float(class_id), x, y, width, height]
         if class_id in OBSTACLE_CLASS_IDS:
-            obstacle_boxes.append(box)
+            obstacle_boxes.append([7.0, x, y, width, height])
+            source_class_ids.append(class_id)
         else:
-            ignored_boxes.append(box)
-    return obstacle_boxes, ignored_boxes
+            ignored_boxes.append([float(class_id), x, y, width, height])
+    return obstacle_boxes, source_class_ids, ignored_boxes
 
 
 def load_review(review_path: Path) -> tuple[str, list[object]]:
@@ -114,7 +115,7 @@ def make_scene(
 ) -> tuple[dict[str, object], tuple[Path, str, str]]:
     media = source_file(source_root, image["imagePath"], image["imageSha256"])
     label = source_file(source_root, image["labelPath"], image["labelSha256"])
-    boxes, ignored_boxes = parse_labels(label)
+    boxes, source_class_ids, ignored_boxes = parse_labels(label)
     if not boxes:
         raise ValueError("image: no approved obstacle annotation")
     name = f"{index:06d}{media.suffix.lower()}"
@@ -129,6 +130,7 @@ def make_scene(
         "permission": image["permission"],
         "licence": image["licence"],
         "obstacleBoxesYolo": boxes,
+        "sourceObstacleClassIds": source_class_ids,
         "ignoredBoxesYolo": ignored_boxes,
         "requiresReview": bool(ignored_boxes),
     }
