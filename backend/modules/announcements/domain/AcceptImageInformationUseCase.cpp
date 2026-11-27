@@ -11,9 +11,10 @@ std::optional<StillImageDescription> AcceptImageInformationUseCase::describeObst
     const auto visibleBox = observation.box.clipped(imageSize);
     if (!visibleBox) return std::nullopt;
     const double centre = (visibleBox->x + visibleBox->width / 2) / imageSize.width;
-    std::string position = "right";
-    if (centre < 1.0 / 3.0) position = "left";
-    else if (centre < 2.0 / 3.0) position = "centre";
-    return StillImageDescription{"Possible obstacle on the " + position + " of the camera view", 0};
+    if (centre < 1.0 / 3.0)
+        return StillImageDescription{"Possible obstacle on the left of the camera view", 0};
+    if (centre < 2.0 / 3.0)
+        return StillImageDescription{"Possible obstacle in the centre of the camera view", 0};
+    return StillImageDescription{"Possible obstacle on the right of the camera view", 0};
 }
 } // namespace RoadSign::Announcements

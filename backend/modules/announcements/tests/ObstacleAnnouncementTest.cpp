@@ -24,7 +24,7 @@ TEST(ObstacleAnnouncementTest, DescribesClippedBoxCentreAtExactThirdBoundaries) 
     ASSERT_TRUE(right);
     ASSERT_TRUE(farRight);
     EXPECT_EQ(left->text, "Possible obstacle on the left of the camera view");
-    EXPECT_EQ(centre->text, "Possible obstacle on the centre of the camera view");
+    EXPECT_EQ(centre->text, "Possible obstacle in the centre of the camera view");
     EXPECT_EQ(right->text, "Possible obstacle on the right of the camera view");
     EXPECT_EQ(farRight->text, right->text);
     EXPECT_EQ(left->priority, 0);
