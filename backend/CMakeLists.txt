@@ -93,14 +93,21 @@ target_compile_options(obstacle-announcement-test PRIVATE -Wall -Wextra -Wpedant
 add_test(NAME obstacle-announcement COMMAND obstacle-announcement-test)
 
 add_library(sign-recognition STATIC
-    modules/sign-recognition/domain/TrackedSign.cpp)
+    modules/sign-recognition/domain/TrackedSign.cpp
+    modules/sign-recognition/infrastructure/ByteTrackClient.cpp)
 target_include_directories(sign-recognition PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(sign-recognition PRIVATE bytetrack)
 target_compile_options(sign-recognition PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_executable(tracking-test
     modules/sign-recognition/tests/TrackingTest.cpp)
 target_link_libraries(tracking-test PRIVATE sign-recognition GTest::gtest_main)
 target_compile_options(tracking-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME tracking COMMAND tracking-test)
+add_executable(bytetrack-client-test
+    modules/sign-recognition/tests/ByteTrackClientTest.cpp)
+target_link_libraries(bytetrack-client-test PRIVATE sign-recognition GTest::gtest_main)
+target_compile_options(bytetrack-client-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME bytetrack-client COMMAND bytetrack-client-test)
 
 add_executable(road-sign-server app/Main.cpp)
 target_include_directories(road-sign-server PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")

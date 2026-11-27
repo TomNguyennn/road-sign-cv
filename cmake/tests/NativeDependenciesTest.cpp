@@ -44,5 +44,5 @@ TEST(NativeDependencies, NativeOcrSpeechHttpAndTrackerLibrariesLoad) {
     response->setStatusCode(drogon::k202Accepted);
     EXPECT_EQ(response->statusCode(), drogon::k202Accepted);
     BYTETracker tracker{TRACKER_FRAME_RATE, TRACKER_BUFFER_LENGTH};
-    EXPECT_TRUE(tracker.update({}).empty());
+    EXPECT_TRUE(tracker.update({}, 0.0).empty());
 }
