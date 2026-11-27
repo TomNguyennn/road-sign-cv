@@ -29,15 +29,13 @@ their versions/hashes are included in the deployment manifest. They are not trai
 | 2 | roadworks-warning | Roadworks warning | false | 0 |
 | 3 | no-pedestrians | No pedestrians | false | 0 |
 | 4 | street-name | Street name | true | 2 |
-| 5 | pedestrian-direction | Pedestrian direction sign | true | 1 |
+| 5 | shared-path-with-cyclist | Shared path with cyclists | false | 1 |
 | 6 | bus-stop | Bus stop | true | 2 |
-| 7 | temporary-pedestrian-notice | Temporary pedestrian notice | true | 0 |
+| 7 | obstacles | Possible obstacle | false | 0 |
 
-Associated textual plates are labelled separately when they fit a supported text category;
-the first four symbol categories do not promise unrestricted OCR outside their boxes. Directional
-text is quoted; do not infer arrows, distance or route instructions unless explicitly present as
-recognised text. Catalogue guidelines must distinguish a temporary notice from a normal direction
-sign and document ambiguous/excluded examples before annotation.
+Associated textual plates are labelled separately only when they fit a supported text category.
+Classes 0–3 and 5 describe signs; class 7 describes fixed street furniture and does not use OCR.
+A detection does not establish distance, path obstruction or a safe direction of travel.
 
 ## Tensor and geometry contract
 

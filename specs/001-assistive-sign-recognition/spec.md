@@ -164,8 +164,8 @@ an evaluation report from a fixed labelled evaluation set and recorded test cond
 - **FR-001**: The prototype MUST support live browser-camera input and image/video uploads, with one
   selected input per session and an accessible indication of the active input and session state.
 - **FR-002**: It MUST offer recognition for eight catalogue categories: pedestrian-crossing warnings,
-  children warnings, roadworks warnings, no-pedestrian signs, street names, pedestrian directions,
-  bus-stop signs, and temporary pedestrian notices. The evaluation catalogue MUST document included
+  children warnings, roadworks warnings, no-pedestrian signs, street names, shared-path-with-cyclist signs,
+  bus-stop signs, and fixed street-furniture obstacles. The evaluation catalogue MUST document included
   variants, examples, and exclusions; these categories do not imply coverage of every UK sign.
 - **FR-003**: It MUST extract readable text from detected signs where relevant, associate text with
   the correct sign, and distinguish observed text from the recognised sign meaning. Unknown or

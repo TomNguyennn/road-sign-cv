@@ -1,5 +1,13 @@
 # Implementation Plan: Accessible Sign Recognition Web Prototype
 
+## Revised catalogue and obstacle work
+
+The eight class IDs are fixed in `contracts/model-bundle.md`: retain IDs 0–4 and 6; replace ID 5 with the shared-path-with-cyclist sign and ID 7 with fixed street-furniture obstacles. Update the catalogue, policy, validator, training, model metadata and tests together before training. T025/T026 need revision; existing checkmarks do not prove the revised contract. Output remains `[1,12,8400]`; changed semantics require new training and parity evidence.
+
+Review selected ROD dataset poles, bins, benches, cones, barriers and similar fixed objects, source permissions, annotations and UK relevance before importing. Exclude untraceable or unlicensed images, preserve source/location groups in held-out splits, and review partially labelled images before treating omitted objects as background. Preserve existing local files and do not commit raw datasets.
+
+For accepted obstacles, announce a possible obstacle on the left, centre or right of the camera view. Derive position from the clipped box centre in equal-width image thirds. Apply existing tracking, confidence and duplicate suppression; priority is 0. Do not infer distance, collision, a clear path or a safe direction. Test position boundaries, uncertainty, camera movement and repeated alerts; evaluate on held-out UK scenes.
+
 **Branch**: `001-assistive-sign-recognition` | **Date**: 2026-11-23 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/001-assistive-sign-recognition/spec.md`

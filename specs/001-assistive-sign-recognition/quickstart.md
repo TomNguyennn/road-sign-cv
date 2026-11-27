@@ -1,5 +1,7 @@
 # Quickstart and Validation Guide
 
+For the revised catalogue, verify source-level data permissions and the class order in `contracts/model-bundle.md`. Evaluate obstacle detection on held-out UK scenes and verify position wording refers to the camera view.
+
 This is the intended runnable interface for the implementation phase. The repository currently
 has no application, Dockerfile, trained model, or test executables; the commands below are not
 claimed to work today. `$speckit-tasks` must turn each prerequisite into implementation work.

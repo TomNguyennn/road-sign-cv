@@ -181,8 +181,13 @@ They must be versioned and changed only using training/validation data, never th
 Acceptance timestamps use source time for tracking (video media time or monotonic capture time),
 wall time for queue freshness, and client monotonic time for capture-to-playback measurements.
 Class 0–3 warnings/restrictions have priority 0; class 5 directions priority 1; classes 4/6 priority 2.
-Class 7 temporary pedestrian notices use priority 0 as a conservative category-level setting,
-without inferring prohibitions or route instructions from arbitrary text.
+Class 7 fixed street-furniture obstacles use priority 0; class 5 shared-path signs use priority 1.
+Obstacle position describes the camera image, not distance or a safe route.
+
+**Decision**: Assess the [ROD obstacle dataset](https://huggingface.co/datasets/Abtinzandi/Obstacle-Detection-Dataset-YOLO)
+for fixed street furniture. Its dataset card states MIT while contributing sources retain their
+original licences. Verify per-image provenance and usage permission before import; exclude images
+without sufficient evidence. Review boxes, preserve source/location groups and collect held-out UK scenes.
 
 ## Review corrections: decisions and alternatives
 
