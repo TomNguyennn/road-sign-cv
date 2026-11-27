@@ -41,9 +41,10 @@ target_compile_options(runtime-foundation-test PRIVATE -Wall -Wextra -Wpedantic 
 add_test(NAME runtime-foundation COMMAND runtime-foundation-test)
 
 add_library(media-processing STATIC
-    modules/media-processing/infrastructure/OpenCvImageClient.cpp)
+    modules/media-processing/infrastructure/OpenCvImageClient.cpp
+    modules/media-processing/infrastructure/OpenCvVideoClient.cpp)
 target_include_directories(media-processing PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(media-processing PUBLIC opencv_core opencv_imgproc opencv_imgcodecs)
+target_link_libraries(media-processing PUBLIC opencv_core opencv_imgproc opencv_imgcodecs opencv_videoio)
 target_compile_options(media-processing PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 add_library(recognition-session STATIC
@@ -81,6 +82,11 @@ add_executable(native-recognition-test tests/integration/NativeRecognitionTest.c
 target_link_libraries(native-recognition-test PRIVATE media-processing GTest::gtest_main)
 target_compile_options(native-recognition-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME native-recognition COMMAND native-recognition-test)
+add_executable(opencv-video-client-test
+    modules/media-processing/tests/OpenCvVideoClientTest.cpp)
+target_link_libraries(opencv-video-client-test PRIVATE media-processing GTest::gtest_main)
+target_compile_options(opencv-video-client-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME opencv-video-client COMMAND opencv-video-client-test)
 
 add_library(announcements STATIC
     modules/announcements/domain/AcceptImageInformationUseCase.cpp
