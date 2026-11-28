@@ -278,3 +278,92 @@ test("does not retry when the upload receipt cannot identify the lost request", 
   expect(transferCount).toBe(1);
   await client.stop();
 });
+
+test("newer audio state and local mute intent survive a delayed unmute reply", async () => {
+  let reply: (response: Response) => void = () => {
+    throw new Error("No audio request");
+  };
+  fetchMock.mockImplementation((input: string, init?: RequestInit) => {
+    if (input.endsWith("/audio"))
+      return new Promise<Response>((resolve) => {
+        reply = resolve;
+      });
+    return baseFetch(input, init);
+  });
+  const client = await startClient();
+  const unmute = client.audio("unmute");
+  await vi.waitFor(() => {
+    expect(fetchMock.mock.calls.some(([url]) => url.endsWith("/audio"))).toBe(
+      true,
+    );
+  });
+  const mute = client.audio("mute");
+  expect(client.snapshot?.isMuted).toBe(true);
+  emit("session.state", 1, 4, 2, {
+    state: "awaitingInput",
+    audioGeneration: 1,
+    isMuted: false,
+    isAudioBlocked: false,
+  });
+  expect(client.snapshot?.isMuted).toBe(true);
+  reply(
+    Response.json({
+      isMuted: false,
+      isAudioBlocked: false,
+      audioGeneration: 1,
+      stateRevision: 3,
+    }),
+  );
+  await unmute;
+  await vi.waitFor(() => {
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url.endsWith("/audio")),
+    ).toHaveLength(2);
+  });
+  reply(
+    Response.json({
+      isMuted: true,
+      isAudioBlocked: false,
+      audioGeneration: 2,
+      stateRevision: 5,
+    }),
+  );
+  await mute;
+  expect(client.snapshot?.stateRevision).toBe(5);
+  expect(client.snapshot?.isMuted).toBe(true);
+  await client.stop();
+});
+
+test("retains latest description independently and clears it on seek", async () => {
+  const client = await startClient();
+  emit("description.latest", 1, 3, 2, {
+    descriptionId: "latest-1",
+    text: "Crossing ahead",
+  });
+  expect(client.latestAcceptedDescription).toEqual({
+    descriptionId: "latest-1",
+    text: "Crossing ahead",
+    epoch: 1,
+  });
+  emit("session.state", 2, 4, 3, {
+    state: "processing",
+    audioGeneration: 2,
+    durationMs: 3000,
+  });
+  expect(client.latestAcceptedDescription).toBeNull();
+  await client.stop();
+});
+
+test("stop clears the session before audio cancellation acknowledgment finishes", async () => {
+  callbacks.onCancelAudio = vi.fn(() => new Promise<void>(() => undefined));
+  const client = await startClient();
+  await client.stop();
+  expect(client.snapshot).toBeNull();
+  expect(FakeEventSource.current?.closed).toBe(true);
+  expect(callbacks.onEnd).toHaveBeenCalledOnce();
+  expect(
+    fetchMock.mock.calls.some(
+      ([url, init]) => url.endsWith("/session-1") && init?.method === "DELETE",
+    ),
+  ).toBe(true);
+});

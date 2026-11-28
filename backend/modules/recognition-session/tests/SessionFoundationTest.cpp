@@ -135,6 +135,32 @@ TEST(SessionFoundationTest, HeartbeatRejectsStaleEpoch) {
                                   1, now + std::chrono::seconds{5}));
 }
 
+TEST(SessionFoundationTest, AudioControlRequiresOwnerAndAcknowledgesOldGeneration) {
+    SessionService service{3, "https://demo.example"};
+    const auto now = std::chrono::steady_clock::now();
+    const auto session = service.create(SourceKind::image, "https://demo.example", now).session.value();
+    EXPECT_FALSE(service.controlAudio(session.sessionId, session.csrfToken,
+                                      "https://demo.example", 1, "mute", std::nullopt, now));
+    ASSERT_TRUE(service.attachEvents(session.sessionId, now));
+    const auto before = service.snapshot()->stateRevision;
+    EXPECT_FALSE(service.controlAudio(session.sessionId, "wrong", "https://demo.example", 1,
+                                      "mute", std::nullopt, now));
+    EXPECT_FALSE(service.controlAudio(session.sessionId, session.csrfToken,
+                                      "https://demo.example", 2, "mute", std::nullopt, now));
+    const auto muted = service.controlAudio(session.sessionId, session.csrfToken,
+                                            "https://demo.example", 1, "mute", std::nullopt, now);
+    ASSERT_TRUE(muted);
+    ASSERT_TRUE(muted->cancellation);
+    EXPECT_EQ(service.snapshot()->audioGeneration, 2);
+    EXPECT_GT(service.snapshot()->stateRevision, before);
+    EXPECT_FALSE(service.acknowledgeAudioCancellation(session.sessionId, "wrong",
+        "https://demo.example", muted->cancellation->cancellationId, 1));
+    EXPECT_TRUE(service.acknowledgeAudioCancellation(session.sessionId, session.csrfToken,
+        "https://demo.example", muted->cancellation->cancellationId, 1));
+    EXPECT_TRUE(service.acknowledgeAudioCancellation(session.sessionId, session.csrfToken,
+        "https://demo.example", muted->cancellation->cancellationId, 1));
+}
+
 TEST(SessionFoundationTest, HeartbeatExtendsLeaseButCannotReviveAnExpiredSession) {
     SessionService service{3, "https://demo.example"};
     const auto now = std::chrono::steady_clock::now();

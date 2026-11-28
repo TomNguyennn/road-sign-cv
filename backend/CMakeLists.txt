@@ -48,11 +48,13 @@ target_link_libraries(media-processing PUBLIC opencv_core opencv_imgproc opencv_
 target_compile_options(media-processing PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 add_library(recognition-session STATIC
+    modules/recognition-session/application/ControlAudioUseCase.cpp
     modules/recognition-session/application/SessionService.cpp
     modules/recognition-session/application/ProcessVideoUseCase.cpp
     modules/recognition-session/infrastructure/SessionExecutor.cpp
     modules/recognition-session/infrastructure/SessionEventBuffer.cpp
     modules/recognition-session/infrastructure/SessionController.cpp
+    modules/recognition-session/infrastructure/AudioControlsController.cpp
     modules/recognition-session/infrastructure/MediaAdmissionController.cpp
     modules/recognition-session/infrastructure/SessionEventsController.cpp
     modules/recognition-session/infrastructure/VideoController.cpp)
@@ -72,6 +74,12 @@ add_executable(video-recognition-contract-test
 target_link_libraries(video-recognition-contract-test PRIVATE recognition-session GTest::gtest_main)
 target_compile_options(video-recognition-contract-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME video-recognition-contract COMMAND video-recognition-contract-test)
+
+add_executable(audio-controls-test
+    modules/recognition-session/tests/AudioControlsTest.cpp)
+target_link_libraries(audio-controls-test PRIVATE recognition-session GTest::gtest_main)
+target_compile_options(audio-controls-test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME audio-controls COMMAND audio-controls-test)
 
 add_executable(session-event-buffer-test
     modules/recognition-session/tests/SessionEventBufferTest.cpp)

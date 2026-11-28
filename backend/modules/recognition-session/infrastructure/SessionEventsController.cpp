@@ -152,6 +152,7 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
                         loop->invalidateTimer(*timerId);
                         return;
                     }
+                    sessions.expireAudioCancellation(now);
                     const auto current = sessions.snapshot();
                     if (!current || current->sessionId != id) {
                         streamOwner->close();
@@ -207,12 +208,13 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
                         (current->stateRevision != previous->stateRevision &&
                          (current->epoch != previous->epoch || current->state != previous->state ||
                           current->audioGeneration != previous->audioGeneration ||
-                          current->isMuted != previous->isMuted));
+                          current->isMuted != previous->isMuted ||
+                          current->isAudioBlocked != previous->isAudioBlocked));
                     if (stateChanged) {
                         Json::Value payload; payload["state"] = stateName(current->state);
                         payload["audioGeneration"] = current->audioGeneration;
                         payload["isMuted"] = current->isMuted;
-                        payload["isAudioBlocked"] = false;
+                        payload["isAudioBlocked"] = current->isAudioBlocked;
                         if (current->sourceKind == SourceKind::video && current->acceptedMedia) {
                             if (current->acceptedMedia->positionMs)
                                 payload["sourceTimeMs"] =
@@ -228,6 +230,25 @@ void registerSessionEventRoutes(HttpAppFramework& app, SessionService& sessions,
                             streamOwner->close();
                             loop->invalidateTimer(*timerId);
                             return;
+                        }
+                    }
+                    if (current->audioGeneration != previous->audioGeneration) {
+                        const auto cancellation = sessions.pendingAudioCancellation(id);
+                        if (cancellation) {
+                            Json::Value payload;
+                            payload["cancellationId"] = cancellation->cancellationId;
+                            payload["cancelThroughAudioGeneration"] =
+                                cancellation->cancelThroughAudioGeneration;
+                            payload["audioGeneration"] = current->audioGeneration;
+                            payload["reason"] = "mute";
+                            if (!sendEvent(streamOwner, id, *current, *eventSeq,
+                                           "audio.cancel", std::move(payload))) {
+                                static_cast<void>(sessions.beginEnd(id, csrf, origin, now));
+                                static_cast<void>(sessions.completeCleanup(id));
+                                streamOwner->close();
+                                loop->invalidateTimer(*timerId);
+                                return;
+                            }
                         }
                     }
                     for (auto& event : events.drain(id, current->epoch, current->stateRevision)) {

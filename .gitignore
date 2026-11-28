@@ -112,3 +112,13 @@ secrets/
 Thumbs.db
 .idea/
 .vscode/
+
+
+# Remove training data
+training/road_sign_training/dataset/
+
+
+# Speckit and Agent
+
+.specify
+.agents

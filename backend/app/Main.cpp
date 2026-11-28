@@ -2,6 +2,7 @@
 #include "infrastructure/RuntimeConfig.hpp"
 #include "modules/recognition-session/application/SessionService.hpp"
 #include "modules/recognition-session/infrastructure/MediaAdmissionController.hpp"
+#include "modules/recognition-session/infrastructure/AudioControlsController.hpp"
 #include "modules/recognition-session/infrastructure/SessionController.hpp"
 #include "modules/recognition-session/infrastructure/SessionEventBuffer.hpp"
 #include "modules/recognition-session/infrastructure/VideoController.hpp"
@@ -54,6 +55,7 @@ int main() {
     RecognitionSession::registerSessionRoutes(drogon::app(), sessions, events, *config);
     RecognitionSession::registerMediaAdmissionRoutes(drogon::app(), sessions, *config);
     RecognitionSession::registerVideoRoutes(drogon::app(), sessions, *config);
+    RecognitionSession::registerAudioControlRoutes(drogon::app(), sessions, *config);
     drogon::app().getLoop()->runEvery(1.0, [&sessions] {
         sessions.expireUnattached(std::chrono::steady_clock::now());
     });

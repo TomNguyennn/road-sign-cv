@@ -1,10 +1,12 @@
 #pragma once
 
 #include "../domain/RecognitionSession.hpp"
+#include "ControlAudioUseCase.hpp"
 
 #include <chrono>
 #include <deque>
 #include <mutex>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -80,6 +82,17 @@ public:
         std::chrono::steady_clock::time_point now);
     [[nodiscard]] std::optional<Entity> snapshot() const;
     [[nodiscard]] std::vector<UploadEventSnapshot> drainUploadEvents(std::string_view sessionId);
+    [[nodiscard]] std::optional<AudioControlResult> controlAudio(
+        std::string_view sessionId, std::string_view csrfToken, std::string_view origin,
+        std::uint32_t epoch, std::string_view action,
+        std::optional<std::string_view> descriptionId,
+        std::chrono::steady_clock::time_point now);
+    [[nodiscard]] bool acknowledgeAudioCancellation(
+        std::string_view sessionId, std::string_view csrfToken, std::string_view origin,
+        std::string_view cancellationId, std::uint32_t cutoff);
+    [[nodiscard]] std::optional<AudioCancellation> pendingAudioCancellation(
+        std::string_view sessionId) const;
+    void expireAudioCancellation(std::chrono::steady_clock::time_point now);
 
 private:
     [[nodiscard]] static std::string randomUuid();
@@ -93,6 +106,7 @@ private:
     const std::string trustedOrigin_;
     mutable std::mutex mutex_;
     std::optional<Entity> active_;
+    std::unique_ptr<ControlAudioUseCase> audioControls_;
     std::deque<UploadEventSnapshot> uploadEvents_;
 };
 } // namespace RoadSign::RecognitionSession

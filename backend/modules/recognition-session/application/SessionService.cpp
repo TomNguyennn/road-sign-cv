@@ -75,6 +75,7 @@ CreateResult SessionService::create(SourceKind sourceKind, std::string_view orig
     session.eventAttachDeadline = now + kEventAttachWindow;
     session.heartbeatDeadline = now + kHeartbeatLease;
     active_ = session;
+    audioControls_ = std::make_unique<ControlAudioUseCase>(*active_);
     uploadEvents_.clear();
     return {CreateResult::Status::created, session};
 }
@@ -97,6 +98,7 @@ void SessionService::expireUnattached(std::chrono::steady_clock::time_point now)
     if (!active_ || active_->eventsAttached || now <= active_->eventAttachDeadline)
         return;
     active_->state = State::ended;
+    audioControls_.reset();
     active_.reset();
     uploadEvents_.clear();
 }
@@ -143,6 +145,7 @@ bool SessionService::completeCleanup(std::string_view sessionId) {
         return false;
     active_->state = State::ended;
     ++active_->stateRevision;
+    audioControls_.reset();
     active_.reset();
     uploadEvents_.clear();
     return true;
@@ -155,6 +158,7 @@ void SessionService::shutdown() noexcept {
     ++active_->stateRevision;
     active_->state = State::ended;
     ++active_->stateRevision;
+    audioControls_.reset();
     active_.reset();
     uploadEvents_.clear();
 }
@@ -230,6 +234,7 @@ std::optional<Entity> SessionService::seekVideo(
     }
     ++active_->epoch;
     ++active_->audioGeneration;
+    if (audioControls_) audioControls_->clearHistory();
     ++active_->stateRevision;
     active_->state = State::processing;
     active_->acceptedMedia->positionMs = positionMs;
@@ -353,5 +358,45 @@ std::vector<UploadEventSnapshot> SessionService::drainUploadEvents(std::string_v
 std::optional<Entity> SessionService::snapshot() const {
     std::lock_guard lock(mutex_);
     return active_;
+}
+
+std::optional<AudioControlResult> SessionService::controlAudio(
+    std::string_view sessionId, std::string_view csrfToken, std::string_view origin,
+    std::uint32_t epoch, std::string_view action,
+    std::optional<std::string_view> descriptionId,
+    std::chrono::steady_clock::time_point now) {
+    std::lock_guard lock(mutex_);
+    if (!authenticateLocked(sessionId, csrfToken, origin) || !audioControls_ ||
+        active_->epoch != epoch || active_->state == State::created ||
+        active_->state == State::ending)
+        return std::nullopt;
+    if (action == "mute") return audioControls_->mute(now);
+    if (action == "unmute") return audioControls_->unmute(now);
+    if (action == "enable") return audioControls_->enable(now);
+    if (action == "repeat") return audioControls_->repeat(now);
+    if (action == "recover" && descriptionId)
+        return audioControls_->recover(*descriptionId, audioControls_->isActivated(), now);
+    return std::nullopt;
+}
+
+bool SessionService::acknowledgeAudioCancellation(
+    std::string_view sessionId, std::string_view csrfToken, std::string_view origin,
+    std::string_view cancellationId, std::uint32_t cutoff) {
+    std::lock_guard lock(mutex_);
+    return authenticateLocked(sessionId, csrfToken, origin) && audioControls_ &&
+           audioControls_->acknowledgeCancellation(cancellationId, cutoff);
+}
+
+std::optional<AudioCancellation> SessionService::pendingAudioCancellation(
+    std::string_view sessionId) const {
+    std::lock_guard lock(mutex_);
+    if (!active_ || active_->sessionId != sessionId || !audioControls_)
+        return std::nullopt;
+    return audioControls_->pendingCancellation();
+}
+
+void SessionService::expireAudioCancellation(std::chrono::steady_clock::time_point now) {
+    std::lock_guard lock(mutex_);
+    if (audioControls_) audioControls_->expireCancellation(now);
 }
 } // namespace RoadSign::RecognitionSession

@@ -195,9 +195,16 @@ capture or speech. Backend controls can be tested with deterministic audio obser
 
 ### Tests for User Story 3
 
-- [ ] T059 [P] [US3] Write backend audio-control tests in `backend/modules/recognition-session/tests/AudioControlsTest.cpp` for mute/generation changes, unmute without backlog, empty/muted repeat, blocked activation, stale acknowledgments and missing-cancel-ack session termination. Test acknowledgments for cutoff k after generation k+1, cancel-all behavior, latest completed receipt replay and unknown/superseded IDs, plus first-image recovery without any started history.
-- [ ] T060 [P] [US3] Write state/playback race tests in `frontend/src/modules/audio-feedback/AudioPlaybackService.test.ts` for immediate mute/stop, rapid mute-unmute intent ordering, expired GET validity, superseded fetches and no playback-slot reuse before confirmed cancellation. Test Read latest result after initial audio rejection, stale descriptionId, coalesced recovery clicks and barrier acknowledgment independent of epoch filtering. Cover repeat/recovery after track removal and history truncation with null source IDs; verify finite manual-offer expiry and no accidental overlay/timing updates.
-- [ ] T061 [P] [US3] Write keyboard/focus/status and recovery tests in `frontend/tests/e2e/AccessibleControls.spec.ts` for every control, hidden visuals, non-live transcripts, denial/revocation, malformed uploads, EventSource failure, hidden-page cleanup and no automatic resume.
+- [X] T059 [P] [US3] Write backend audio-control tests in `backend/modules/recognition-session/tests/AudioControlsTest.cpp` for mute/generation changes, unmute without backlog, empty/muted repeat, blocked activation, stale acknowledgments and missing-cancel-ack session termination. Test acknowledgments for cutoff k after generation k+1, cancel-all behavior, latest completed receipt replay and unknown/superseded IDs, plus first-image recovery without any started history.
+- [X] T060 [P] [US3] Write state/playback race tests in `frontend/src/modules/audio-feedback/AudioPlaybackService.test.ts` for immediate mute/stop, rapid mute-unmute intent ordering, expired GET validity, superseded fetches and no playback-slot reuse before confirmed cancellation. Test Read latest result after initial audio rejection, stale descriptionId, coalesced recovery clicks and barrier acknowledgment independent of epoch filtering. Cover repeat/recovery after track removal and history truncation with null source IDs; verify finite manual-offer expiry and no accidental overlay/timing updates.
+- [X] T061 [P] [US3] Write keyboard/focus/status and recovery tests in `frontend/tests/e2e/AccessibleControls.spec.ts` for every control, hidden visuals, non-live transcripts, denial/revocation, malformed uploads, EventSource failure, hidden-page cleanup and no automatic resume.
+
+T059–T061 test-first evidence (2026-11-27): C++ syntax checking stops at the not-yet-implemented
+`ControlAudioUseCase.hpp`; Vitest and TypeScript stop at the not-yet-implemented
+`AudioPlaybackService.ts`; Chromium reaches the local page and fails its first control assertion
+because the current placeholder has no input selector. Playwright discovers all 27 cases across
+Chromium, Firefox and WebKit. The existing App unit test and e2e file lint pass. These checkboxes
+record authored red tests; behavioral pass and full browser execution remain with T062–T070.
 
 ### Implementation for User Story 3
 
@@ -210,6 +217,14 @@ capture or speech. Backend controls can be tested with deterministic audio obser
 - [ ] T068 [US3] Test trusted-HTTPS camera/audio and actual screen readers across the UI-contract desktop/phone matrix, recording OS/browser/assistive versions and pass/fail primary tasks in `reports/accessibility/device-matrix.md`; automated WebKit or axe results cannot substitute for physical phone/assistive tests.
 - [ ] T069 [US3] Fix only accessibility/control defects found by T059–T068 in their owning components and add regression cases in `frontend/tests/e2e/AccessibleControls.spec.ts`; keep status versus transcript behavior separate and preserve US1/US2 recognition.
 - [ ] T070 [US3] Run the independent controls/recovery scenarios and prior-story regression suite; record keyboard/screen-reader task completion, immediate local stop and residual data checks in `reports/acceptance/us3.md`, leaving unavailable devices as explicit unfinished validation.
+
+US3 implementation checkpoint (2026-11-28): backend audio-control state, owner-validated
+control/cancellation routes and SSE cancellation publication are implemented; focused ARM64 CTest
+2/2 and server link pass. The browser playback service and session-client mute/revision/cleanup
+paths pass 19 Vitest cases, TypeScript and ESLint. T062–T070 remain open because the real
+description/WAV pipeline, recognition page and physical assistive-device acceptance are not yet
+integrated. Actual results and missing evidence are in `reports/acceptance/us3.md` and
+`reports/accessibility/device-matrix.md`.
 
 **Checkpoint**: All P1 recognition, repetition and accessible-control behavior is integrated. Phone
 CA trust, real audio and assistive-tool evidence are required before claiming those environments work.

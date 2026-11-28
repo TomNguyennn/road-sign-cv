@@ -3,6 +3,8 @@ export interface SessionState {
   audioGeneration: number;
   stateRevision: number;
   state: string;
+  isMuted?: boolean;
+  isAudioBlocked?: boolean;
   sourceTimeMs?: number;
   durationMs?: number;
 }
@@ -23,6 +25,10 @@ export interface SessionCallbacks {
   onCancelAudio: (cutoff: number) => Promise<void>;
   onFrame: (payload: unknown) => void;
   onAudioReady: (payload: unknown) => void;
+  onDescription?: (description: {
+    descriptionId: string;
+    text: string;
+  }) => void;
   onError: (message: string) => void;
   onEnd: () => void;
 }
@@ -102,6 +108,18 @@ export class SessionClient {
   private lastEventSeq = 0;
   private controlQueue: Promise<void> = Promise.resolve();
   private uncertainAttemptId: string | null = null;
+  private latestDescription: {
+    descriptionId: string;
+    text: string;
+    epoch: number;
+  } | null = null;
+  private pendingMuteIntent: boolean | null = null;
+  private audioIntent = 0;
+  private uploadAbort: AbortController | null = null;
+  private readonly onVisibilityChange = () => {
+    if (document.visibilityState === "hidden")
+      void this.stop().catch(() => undefined);
+  };
 
   constructor(private readonly callbacks: SessionCallbacks) {}
 
@@ -113,6 +131,12 @@ export class SessionClient {
   }
   get isUploadUncertain(): boolean {
     return this.uncertainAttemptId !== null;
+  }
+  get latestAcceptedDescription(): {
+    descriptionId: string;
+    text: string;
+  } | null {
+    return this.latestDescription;
   }
 
   async start(): Promise<void> {
@@ -141,6 +165,7 @@ export class SessionClient {
     this.heartbeatTimer = setInterval(() => {
       void this.heartbeat();
     }, 5000);
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
   }
 
   private attachEvents(): Promise<void> {
@@ -165,6 +190,7 @@ export class SessionClient {
         "frame.result",
         "audio.ready",
         "audio.cancel",
+        "description.latest",
         "session.ended",
       ]) {
         events.addEventListener(type, (event) => {
@@ -224,6 +250,18 @@ export class SessionClient {
       return;
     if (envelope.type === "upload.state")
       this.applyUpload(envelope.payload, envelope.stateRevision);
+    if (
+      envelope.type === "description.latest" &&
+      typeof envelope.payload.descriptionId === "string" &&
+      typeof envelope.payload.text === "string"
+    ) {
+      this.latestDescription = {
+        descriptionId: envelope.payload.descriptionId,
+        text: envelope.payload.text,
+        epoch: envelope.epoch,
+      };
+      this.callbacks.onDescription?.(this.latestDescription);
+    }
     if (envelope.type === "frame.result")
       this.callbacks.onFrame(envelope.payload);
     if (
@@ -254,14 +292,21 @@ export class SessionClient {
     )
       return;
     if (envelope.epoch > this.state.epoch) {
-      void this.callbacks.onCancelAudio(this.state.audioGeneration);
+      void this.callbacks
+        .onCancelAudio(this.state.audioGeneration)
+        .catch(() => {
+          this.callbacks.onError("Audio cancellation could not be confirmed.");
+        });
       this.callbacks.onReset();
+      this.latestDescription = null;
     }
     this.state = {
       epoch: envelope.epoch,
       stateRevision: envelope.stateRevision,
       audioGeneration: payload.audioGeneration,
       state: payload.state,
+      isMuted: this.pendingMuteIntent ?? payload.isMuted === true,
+      isAudioBlocked: payload.isAudioBlocked === true,
       ...(typeof payload.sourceTimeMs === "number"
         ? { sourceTimeMs: payload.sourceTimeMs }
         : {}),
@@ -350,6 +395,8 @@ export class SessionClient {
     this.uncertainAttemptId = attemptId;
     const body = new FormData();
     body.set("file", file);
+    const abort = new AbortController();
+    this.uploadAbort = abort;
     try {
       const response = await fetch(
         `/api/v1/sessions/${session.sessionId}/media`,
@@ -357,6 +404,7 @@ export class SessionClient {
           method: "POST",
           credentials: "same-origin",
           body,
+          signal: abort.signal,
           headers: {
             "X-CSRF-Token": session.csrfToken,
             "X-Epoch": String(this.state.epoch),
@@ -386,6 +434,8 @@ export class SessionClient {
           { cause: error },
         );
       throw error;
+    } finally {
+      if (this.uploadAbort === abort) this.uploadAbort = null;
     }
   }
 
@@ -419,6 +469,90 @@ export class SessionClient {
     return request;
   }
 
+  audio(
+    action: "mute" | "unmute" | "enable" | "repeat" | "recover",
+    descriptionId?: string,
+  ): Promise<void> {
+    const intent = ++this.audioIntent;
+    if (action === "mute") {
+      this.pendingMuteIntent = true;
+      if (this.state) {
+        void this.callbacks
+          .onCancelAudio(this.state.audioGeneration)
+          .catch(() => {
+            this.callbacks.onError(
+              "Audio cancellation could not be confirmed.",
+            );
+          });
+        this.state = { ...this.state, isMuted: true };
+        this.callbacks.onState(this.state);
+      }
+    } else if (action === "unmute") {
+      this.pendingMuteIntent = false;
+    }
+    const request = this.controlQueue.then(() =>
+      this.audioNow(action, descriptionId, intent),
+    );
+    this.controlQueue = request.then(
+      () => undefined,
+      () => undefined,
+    );
+    return request;
+  }
+
+  private async audioNow(
+    action: string,
+    descriptionId: string | undefined,
+    intent: number,
+  ): Promise<void> {
+    const session = this.session;
+    const state = this.state;
+    if (!session || !state) throw new Error("Session is unavailable");
+    if (
+      action === "recover" &&
+      (!descriptionId ||
+        descriptionId !== this.latestDescription?.descriptionId)
+    )
+      throw new Error("Latest result is unavailable");
+    const response = await fetch(
+      `/api/v1/sessions/${session.sessionId}/audio`,
+      {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": session.csrfToken,
+        },
+        body: JSON.stringify({
+          action,
+          epoch: state.epoch,
+          ...(action === "recover" ? { descriptionId } : {}),
+        }),
+      },
+    );
+    if (!response.ok) throw new Error("Audio action is unavailable");
+    const result: unknown = await response.json();
+    if (
+      !isRecord(result) ||
+      typeof result.stateRevision !== "number" ||
+      typeof result.audioGeneration !== "number" ||
+      typeof result.isMuted !== "boolean" ||
+      typeof result.isAudioBlocked !== "boolean"
+    )
+      throw new Error("Invalid audio response");
+    if (this.session !== session || !this.state) return;
+    if (intent === this.audioIntent) this.pendingMuteIntent = null;
+    if (result.stateRevision <= this.state.stateRevision) return;
+    this.state = {
+      ...this.state,
+      stateRevision: result.stateRevision,
+      audioGeneration: result.audioGeneration,
+      isMuted: this.pendingMuteIntent ?? result.isMuted,
+      isAudioBlocked: result.isAudioBlocked,
+    };
+    this.callbacks.onState(this.state);
+  }
+
   private async seekNow(positionMs: number): Promise<void> {
     const session = this.session;
     if (
@@ -434,6 +568,7 @@ export class SessionClient {
     const expectedEpoch = this.state.epoch;
     await this.callbacks.onCancelAudio(this.state.audioGeneration);
     this.callbacks.onReset();
+    this.latestDescription = null;
     const response = await fetch(`/api/v1/sessions/${session.sessionId}/seek`, {
       method: "POST",
       credentials: "same-origin",
@@ -497,14 +632,21 @@ export class SessionClient {
   async stop(): Promise<void> {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = null;
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.events?.close();
     this.events = null;
-    await this.callbacks.onCancelAudio(Number.MAX_SAFE_INTEGER);
+    this.uploadAbort?.abort();
+    this.uploadAbort = null;
+    void this.callbacks.onCancelAudio(Number.MAX_SAFE_INTEGER).catch(() => {
+      this.callbacks.onError("Audio cancellation could not be confirmed.");
+    });
     const session = this.session;
     this.session = null;
     this.state = null;
     this.upload = null;
     this.uncertainAttemptId = null;
+    this.latestDescription = null;
+    this.pendingMuteIntent = null;
     this.lastEventSeq = 0;
     this.callbacks.onEnd();
     if (!session) return;
