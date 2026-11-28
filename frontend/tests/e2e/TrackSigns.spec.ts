@@ -224,7 +224,8 @@ test("seek fences an in-flight audio fetch and ignores old-epoch results", async
     sourceTimeMs: 0,
     durationMs: 3000,
   });
-  await emit(page, "audio.ready", 1, 4, 3, {
+  await emit(page, "frame.result", 1, 4, 3, { frameId: 9, sourceTimeMs: 0 });
+  await emit(page, "audio.ready", 1, 4, 4, {
     audioGeneration: 1,
     audioUrl: "/api/v1/sessions/session-1/audio/old",
   });
@@ -233,18 +234,18 @@ test("seek fences an in-flight audio fetch and ignores old-epoch results", async
   await page.getByLabel("Seek position (seconds)").press("ArrowRight");
   await page.getByRole("button", { name: "Seek to selected position" }).click();
   await expect.poll(() => isSeekRequested).toBe(true);
-  await emit(page, "session.state", 2, 6, 4, {
+  await emit(page, "session.state", 2, 6, 5, {
     state: "processing",
     audioGeneration: 2,
     sourceTimeMs: 1000,
     durationMs: 3000,
   });
-  await emit(page, "audio.cancel", 1, 5, 5, {
+  await emit(page, "audio.cancel", 1, 5, 6, {
     cancellationId: "cancel-1",
     cancelThroughAudioGeneration: 1,
   });
-  await emit(page, "frame.result", 1, 5, 6, { frameId: 10 });
-  await emit(page, "audio.ready", 1, 5, 7, {
+  await emit(page, "frame.result", 1, 5, 7, { frameId: 10 });
+  await emit(page, "audio.ready", 1, 5, 8, {
     audioGeneration: 1,
     audioUrl: "/api/v1/sessions/session-1/audio/old",
   });
@@ -262,7 +263,10 @@ test("seek fences an in-flight audio fetch and ignores old-epoch results", async
     await page.evaluate(() => window.videoHarness.audioFetchCompleted),
   ).toBe(false);
   expect(
-    await page.evaluate(() => window.videoHarness.events.includes("frame")),
-  ).toBe(false);
+    await page.evaluate(
+      () =>
+        window.videoHarness.events.filter((item) => item === "frame").length,
+    ),
+  ).toBe(1);
   await expect(page.getByText("00:01 / 00:03")).toBeVisible();
 });
