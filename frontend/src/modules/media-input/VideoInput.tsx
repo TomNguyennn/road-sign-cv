@@ -14,6 +14,11 @@ interface VideoInputProps {
 
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
+function formatTime(milliseconds: number): string {
+  const seconds = Math.floor(Math.max(0, milliseconds) / 1000);
+  return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 export function VideoInput({
   onAudioReady,
   onCancelAudio,
@@ -196,6 +201,9 @@ export function VideoInput({
         value={state?.sourceTimeMs ?? 0}
         max={durationMs || 1}
       />
+      <output aria-live="off">
+        {formatTime(state?.sourceTimeMs ?? 0)} / {formatTime(durationMs)}
+      </output>
       <label htmlFor="video-seek">Seek position (seconds)</label>
       <input
         id="video-seek"

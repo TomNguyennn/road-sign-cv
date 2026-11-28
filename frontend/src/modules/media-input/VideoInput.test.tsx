@@ -159,6 +159,7 @@ test("labels video controls, reports progress, and clears old results before see
       1000,
     );
   });
+  expect(screen.getByText("00:01 / 00:03")).toBeTruthy();
   fireEvent.change(screen.getByLabelText("Seek position (seconds)"), {
     target: { value: "2" },
   });
@@ -204,9 +205,7 @@ test("rejects unsupported files before transfer", async () => {
   fireEvent.change(screen.getByLabelText("Video file"), {
     target: { files: [new File(["text"], "note.txt", { type: "text/plain" })] },
   });
-  expect(screen.getByRole("status").textContent).toContain(
-    "Choose an MP4 or WebM file",
-  );
+  expect(screen.getByText("Choose an MP4 or WebM file up to 100 MiB.")).toBeTruthy();
   expect(
     fetchMock.mock.calls.some(([url]) => requestUrl(url).endsWith("/media")),
   ).toBe(false);
