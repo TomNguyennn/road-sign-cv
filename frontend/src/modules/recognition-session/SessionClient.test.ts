@@ -246,3 +246,35 @@ test("reconciles a failed upload before allowing an explicit new attempt", async
   expect(uploads).toBe(2);
   await client.stop();
 });
+
+test("does not retry when the upload receipt cannot identify the lost request", async () => {
+  let transferCount = 0;
+  fetchMock.mockImplementation((input: string, init?: RequestInit) => {
+    if (input.endsWith("/media")) {
+      transferCount += 1;
+      return Promise.reject(new Error("Network interrupted"));
+    }
+    if (input.endsWith("/upload-status"))
+      return Promise.resolve(
+        Response.json({
+          epoch: 1,
+          stateRevision: 3,
+          uploadAttemptId: null,
+          uploadStatus: "idle",
+          uploadAttemptsUsed: 0,
+          maxUploadAttempts: 3,
+          canRetryUpload: true,
+        }),
+      );
+    return baseFetch(input, init);
+  });
+  const client = await startClient();
+  const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
+  await expect(client.uploadVideo(file)).rejects.toThrow(
+    "outcome is uncertain",
+  );
+  expect(client.isUploadUncertain).toBe(true);
+  await expect(client.uploadVideo(file)).rejects.toThrow("unavailable");
+  expect(transferCount).toBe(1);
+  await client.stop();
+});
